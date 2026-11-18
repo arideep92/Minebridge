@@ -13,11 +13,13 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public final class ConfigManager {
 
@@ -37,6 +39,8 @@ public final class ConfigManager {
             "messages.server-status", Set.of("online", "max"),
             "messages.player-list", Set.of("online", "max", "players"));
     private static final int MAX_TEMPLATE_LENGTH = 2000;
+    private static final Pattern SNOWFLAKE_PATTERN = Pattern.compile("[0-9]{17,20}");
+    private static final BigInteger MAX_UNSIGNED_64_BIT = new BigInteger("18446744073709551615");
     private static final Map<String, String> SAFE_MESSAGES = Map.of(
             "messages.minecraft-to-discord", "**{player}**: {message}",
             "messages.discord-to-minecraft", "&9[Discord] &f{player}: {message}",
@@ -259,7 +263,13 @@ public final class ConfigManager {
         errors.addAll(validateMessageTemplates(messageValues));
 
         String token = resolveBotToken(environmentToken, configuredToken);
-        errors.addAll(validateConfiguration(token, channelId));
+        boolean requireChannelId = requiresDiscordChannel(
+                chatEnabled == null || chatEnabled,
+                eventsEnabled == null || eventsEnabled,
+                deathMessages,
+                achievements,
+                discordEvents);
+        errors.addAll(validateConfiguration(token, channelId, requireChannelId));
         if (errors.isEmpty()) {
             return new Candidate(new Settings(
                     token,
@@ -845,18 +855,80 @@ public final class ConfigManager {
                 && token.chars().noneMatch(Character::isWhitespace);
     }
 
+    public static boolean isValidSnowflake(String snowflake) {
+        if (snowflake == null || !SNOWFLAKE_PATTERN.matcher(snowflake).matches()) {
+            return false;
+        }
+        return new BigInteger(snowflake).compareTo(MAX_UNSIGNED_64_BIT) <= 0;
+    }
+
     public static boolean isValidChannelId(String channelId) {
-        return channelId != null && channelId.matches("\\d{17,20}");
+        return isValidSnowflake(channelId);
+    }
+
+    public static boolean requiresDiscordChannel(Settings settings) {
+        if (settings == null) {
+            return true;
+        }
+        return requiresDiscordChannel(
+                settings.chatEnabled(),
+                settings.eventsEnabled(),
+                settings.deathMessages(),
+                settings.achievements(),
+                settings.discordEvents());
+    }
+
+    private static boolean requiresDiscordChannel(
+            boolean chatEnabled,
+            boolean eventsEnabled,
+            DeathSettings deathMessages,
+            AchievementSettings achievements,
+            DiscordEventsSettings discordEvents) {
+        if (chatEnabled) {
+            return true;
+        }
+        if (discordEvents == null || !discordEvents.enabled() || !discordEvents.embedsEnabled()) {
+            return false;
+        }
+        boolean playerEventsEnabled = eventsEnabled
+                && discordEvents.playerEventsEnabled()
+                && (discordEvents.joinEnabled()
+                        || discordEvents.leaveEnabled()
+                        || discordEvents.firstJoinEnabled());
+        if (playerEventsEnabled) {
+            return true;
+        }
+        boolean deathNotificationsEnabled = deathMessages != null
+                && deathMessages.enabled()
+                && deathMessages.discordEnabled()
+                && discordEvents.deathsEnabled()
+                && (discordEvents.playerKillsEnabled()
+                        || discordEvents.mobKillsEnabled()
+                        || discordEvents.environmentalDeathsEnabled());
+        if (deathNotificationsEnabled) {
+            return true;
+        }
+        return achievements != null
+                && achievements.enabled()
+                && achievements.discordEnabled()
+                && discordEvents.achievementsEnabled();
     }
 
     public static List<String> validateConfiguration(String token, String channelId) {
+        return validateConfiguration(token, channelId, true);
+    }
+
+    public static List<String> validateConfiguration(
+            String token, String channelId, boolean requireChannelId) {
         List<String> errors = new ArrayList<>();
         if (!isValidBotToken(token)) {
             errors.add(
                     "Discord bot token is missing or invalid; set MINEBRIDGE_BOT_TOKEN "
                             + "or discord.bot-token.");
         }
-        if (!isValidChannelId(channelId)) {
+        boolean channelProvided = channelId != null && !channelId.isBlank();
+        if (requireChannelId ? !isValidChannelId(channelId)
+                : (channelProvided && !isValidChannelId(channelId))) {
             errors.add(
                     "Discord channel ID is missing or invalid; set discord.channel-id "
                             + "to the configured text channel's 17-20 digit ID.");
@@ -864,8 +936,18 @@ public final class ConfigManager {
         return List.copyOf(errors);
     }
 
+    public static List<String> validateConfiguration(Settings settings) {
+        if (settings == null) {
+            return validateConfiguration("", "", true);
+        }
+        return validateConfiguration(
+                settings.botToken(),
+                settings.channelId(),
+                requiresDiscordChannel(settings));
+    }
+
     public List<String> validationErrors() {
-        return validateConfiguration(settings.botToken(), settings.channelId());
+        return validateConfiguration(settings);
     }
 
     public boolean chatEnabled() {

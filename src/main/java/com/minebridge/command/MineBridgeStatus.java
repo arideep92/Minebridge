@@ -10,7 +10,27 @@ public record MineBridgeStatus(
         int outgoingQueueCapacity,
         long uptimeMillis,
         boolean chatRelayEnabled,
-        boolean joinLeaveNotificationsEnabled) {
+        boolean joinLeaveNotificationsEnabled,
+        long outgoingDropped) {
+
+    public MineBridgeStatus(
+            String discordState,
+            boolean channelAvailable,
+            int outgoingQueueSize,
+            int outgoingQueueCapacity,
+            long uptimeMillis,
+            boolean chatRelayEnabled,
+            boolean joinLeaveNotificationsEnabled) {
+        this(
+                discordState,
+                channelAvailable,
+                outgoingQueueSize,
+                outgoingQueueCapacity,
+                uptimeMillis,
+                chatRelayEnabled,
+                joinLeaveNotificationsEnabled,
+                0L);
+    }
 
     public List<String> formatLines() {
         List<String> lines = new ArrayList<>();
@@ -20,6 +40,7 @@ public record MineBridgeStatus(
                 + (channelAvailable ? "§aAvailable" : "§cUnavailable"));
         lines.add("§7Outgoing queue: §f" + outgoingQueueSize
                 + "/" + outgoingQueueCapacity);
+        lines.add("§7Outgoing dropped: §f" + outgoingDropped);
         lines.add("§7Plugin uptime: §f" + formatUptime(uptimeMillis));
         lines.add("§7Chat relay: "
                 + (chatRelayEnabled ? "§aEnabled" : "§cDisabled"));

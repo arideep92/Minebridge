@@ -2,6 +2,7 @@ package com.minebridge.command;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MineBridgeStatusTest {
@@ -13,9 +14,11 @@ class MineBridgeStatusTest {
 
         var lines = status.formatLines();
 
+        assertEquals(0L, status.outgoingDropped());
         assertTrue(lines.stream().anyMatch(line -> line.contains("CONNECTED")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("Available")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("7/100")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("Outgoing dropped: §f0")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("1h 1m 1s")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("Chat relay: §aEnabled")));
         assertTrue(lines.stream().anyMatch(
@@ -30,5 +33,18 @@ class MineBridgeStatusTest {
         assertTrue(lines.stream().anyMatch(line -> line.contains("DISCONNECTED")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("Unavailable")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("0s")));
+    }
+
+    @Test
+    void exposesAndFormatsLongOutgoingDroppedCount() {
+        long dropped = 3_000_000_000L;
+        MineBridgeStatus status = new MineBridgeStatus(
+                "CONNECTED", true, 100, 100, 5_000L, true, true, dropped);
+
+        var lines = status.formatLines();
+
+        assertEquals(dropped, status.outgoingDropped());
+        assertTrue(lines.stream().anyMatch(
+                line -> line.contains("Outgoing dropped: §f3000000000")));
     }
 }

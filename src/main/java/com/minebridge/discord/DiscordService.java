@@ -5,16 +5,26 @@ import com.minebridge.command.MineBridgeStatus;
 import com.minebridge.config.ConfigManager;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.exceptions.ErrorResponseException;
+import net.dv8tion.jda.api.exceptions.PermissionException;
+import net.dv8tion.jda.api.exceptions.RateLimitedException;
+import net.dv8tion.jda.api.requests.CloseCode;
+import net.dv8tion.jda.api.requests.ErrorResponse;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.requests.Response;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import org.bukkit.plugin.IllegalPluginAccessException;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public final class DiscordService {
 
@@ -26,6 +36,7 @@ public final class DiscordService {
     private final ConfigManager config;
     private final BlockingMessageQueue outgoingQueue =
             new BlockingMessageQueue(OUTGOING_QUEUE_CAPACITY);
+    private final AtomicLong outgoingDropped = new AtomicLong();
     private final Object lifecycleLock = new Object();
     private final ReloadRequestGate reloadRequests = new ReloadRequestGate();
     private final ActiveClientSnapshot<JDA> incomingClient = new ActiveClientSnapshot<>();
@@ -33,6 +44,9 @@ public final class DiscordService {
     private final InboundMessageProcessor<InboundMessageProcessor.ChatMessage> inboundProcessor;
     private final RateLimitedDiagnostics diagnostics =
             new RateLimitedDiagnostics(DIAGNOSTIC_INTERVAL_NANOS);
+    private final Function<ConfigManager.Settings, JDA> clientFactory;
+    private final Consumer<String> infoLogger;
+    private final Consumer<String> warningLogger;
 
     private volatile JDA jda;
     private volatile JDA pendingJda;
@@ -49,8 +63,33 @@ public final class DiscordService {
     private Consumer<ReloadResult> pendingReload;
 
     public DiscordService(MineBridgePlugin plugin, ConfigManager config) {
+        this(
+                plugin,
+                config,
+                null,
+                message -> {
+                    if (plugin != null) {
+                        plugin.getLogger().info(message);
+                    }
+                },
+                message -> {
+                    if (plugin != null) {
+                        plugin.getLogger().warning(message);
+                    }
+                });
+    }
+
+    DiscordService(
+            MineBridgePlugin plugin,
+            ConfigManager config,
+            Function<ConfigManager.Settings, JDA> clientFactory,
+            Consumer<String> infoLogger,
+            Consumer<String> warningLogger) {
         this.plugin = plugin;
         this.config = config;
+        this.clientFactory = clientFactory != null ? clientFactory : this::createClient;
+        this.infoLogger = infoLogger != null ? infoLogger : ignored -> { };
+        this.warningLogger = warningLogger != null ? warningLogger : ignored -> { };
         this.inboundProcessor = new InboundMessageProcessor<>(
                 InboundMessageProcessor.DEFAULT_CAPACITY,
                 InboundMessageProcessor.DEFAULT_BATCH_SIZE,
@@ -61,6 +100,9 @@ public final class DiscordService {
                         InboundMessageProcessor.DEFAULT_GLOBAL_REFILL_NANOS,
                         System::nanoTime),
                 task -> {
+                    if (plugin == null) {
+                        return false;
+                    }
                     try {
                         plugin.getServer().getScheduler().runTask(plugin, task);
                         return true;
@@ -108,8 +150,7 @@ public final class DiscordService {
 
     public boolean start(Consumer<ReloadResult> callback) {
         ConfigManager.Settings settings = config.currentSettings();
-        List<String> errors = ConfigManager.validateConfiguration(
-                settings.botToken(), settings.channelId());
+        List<String> errors = ConfigManager.validateConfiguration(settings);
         if (!errors.isEmpty()) {
             reportConfigurationErrors(errors);
             complete(callback, new ReloadResult(false, String.join(" ", errors)));
@@ -151,7 +192,7 @@ public final class DiscordService {
 
         JDA created;
         try {
-            created = createClient(settings);
+            created = clientFactory.apply(settings);
         } catch (IllegalArgumentException exception) {
             return startupFailed(
                     callback,
@@ -181,7 +222,7 @@ public final class DiscordService {
                     : "Discord startup was superseded by another client."));
             return false;
         }
-        plugin.getLogger().info(
+        infoLogger.accept(
                 "Discord client started; waiting for the gateway connection.");
         if (created.getStatus() == JDA.Status.CONNECTED) {
             onGatewayReady(created);
@@ -225,7 +266,7 @@ public final class DiscordService {
 
         JDA created;
         try {
-            created = createClient(candidate.settings());
+            created = clientFactory.apply(candidate.settings());
         } catch (IllegalArgumentException exception) {
             finishReloadRequest(requestId, "FAILED");
             complete(callback, new ReloadResult(false,
@@ -263,7 +304,7 @@ public final class DiscordService {
                     "This reload was superseded or MineBridge is shutting down."));
             return;
         }
-        plugin.getLogger().info(
+        infoLogger.accept(
                 "Replacement Discord client started; waiting for the gateway connection.");
         if (created.getStatus() == JDA.Status.CONNECTED) {
             onGatewayReady(created);
@@ -275,9 +316,12 @@ public final class DiscordService {
             JDA current = jda;
             String state = current == null
                     ? lastConnectionState : current.getStatus().name();
+            String channelId = config.getChannelId();
             boolean channelAvailable = current != null
                     && current.getStatus() == JDA.Status.CONNECTED
-                    && current.getTextChannelById(config.getChannelId()) != null;
+                    && channelId != null
+                    && !channelId.isBlank()
+                    && current.getTextChannelById(channelId) != null;
             return new MineBridgeStatus(
                     state,
                     channelAvailable,
@@ -285,8 +329,13 @@ public final class DiscordService {
                     outgoingQueue.capacity(),
                     uptimeMillis,
                     config.chatEnabled(),
-                    config.eventsEnabled());
+                    config.eventsEnabled(),
+                    outgoingDropped.get());
         }
+    }
+
+    public long getOutgoingDropped() {
+        return outgoingDropped.get();
     }
 
     static String stateAfterPendingDiscard(
@@ -311,6 +360,7 @@ public final class DiscordService {
             return;
         }
         if (!outgoingQueue.offer(message)) {
+            outgoingDropped.incrementAndGet();
             warnRateLimited(
                     "outgoing-dropped",
                     "The outgoing Discord queue is full or closed; a new message was dropped.");
@@ -327,7 +377,8 @@ public final class DiscordService {
                         ignored -> { },
                         error -> warnRateLimited(
                                 "embed-api-rejected",
-                                "Discord rejected an announcement embed.")));
+                                formatFailureDiagnostic(
+                                        "Discord rejected an announcement embed", error))));
     }
 
     private void sendNotificationRequest(
@@ -366,7 +417,9 @@ public final class DiscordService {
         }
         submitSafely(
                 () -> sendRequest.accept(channel),
-                failure -> warnRateLimited(submitCategory, submitMessage));
+                failure -> warnRateLimited(
+                        submitCategory,
+                        formatFailureDiagnostic(submitMessage, failure)));
     }
 
     static boolean submitSafely(
@@ -400,7 +453,9 @@ public final class DiscordService {
                 return;
             }
 
-            channel = current.getTextChannelById(config.getChannelId());
+            String channelId = config.getChannelId();
+            channel = channelId == null || channelId.isBlank()
+                    ? null : current.getTextChannelById(channelId);
             if (channel == null) {
                 warnRateLimited(
                         "channel-unavailable",
@@ -427,13 +482,17 @@ public final class DiscordService {
                             error -> {
                                 warnRateLimited(
                                         "outgoing-api-rejected",
-                                        "Discord rejected an outgoing message; it was dropped.");
+                                        formatFailureDiagnostic(
+                                                "Discord rejected an outgoing message; it was dropped",
+                                                error));
                                 finishSend(sendId);
                             });
         } catch (RuntimeException exception) {
             warnRateLimited(
                     "outgoing-submit-failed",
-                    "Could not submit an outgoing message to Discord; it was dropped.");
+                    formatFailureDiagnostic(
+                            "Could not submit an outgoing message to Discord; it was dropped",
+                            exception));
             finishSend(sendId);
         }
     }
@@ -505,6 +564,9 @@ public final class DiscordService {
     }
 
     public void onGatewayReady(JDA source) {
+        if (source == null) {
+            return;
+        }
         Consumer<ReloadResult> callback;
         Consumer<ReloadResult> replacedStartupCallback = null;
         JDA previous = null;
@@ -567,26 +629,127 @@ public final class DiscordService {
                     "A newer reload request superseded this candidate."));
             return;
         }
-        plugin.getLogger().info("Discord gateway connected.");
+        infoLogger.accept("Discord gateway connected.");
         ReloadResult result = new ReloadResult(true, "Discord connection established.");
         complete(callback, result);
         complete(replacedStartupCallback, result);
     }
 
     public void onGatewayDisconnect(JDA source) {
-        if (source == jda || source == pendingJda) {
+        onGatewayDisconnect(source, null, false);
+    }
+
+    public void onGatewayDisconnect(JDA source, CloseCode closeCode, boolean closedByServer) {
+        if (source != null && (source == jda || source == pendingJda)) {
             warnRateLimited(
                     "gateway-disconnected",
-                    "Discord gateway disconnected; JDA will attempt to resume or reconnect.");
+                    formatGatewayDisconnectDiagnostic(closeCode, closedByServer));
         }
     }
 
     public void onGatewayResume(JDA source) {
-        if (source == jda) {
+        if (source != null && source == jda) {
             lastConnectionState = "CONNECTED";
             hasConnected = true;
-            plugin.getLogger().info("Discord gateway session resumed.");
+            infoLogger.accept("Discord gateway session resumed.");
         }
+    }
+
+    public void onGatewaySessionInvalidate(JDA source) {
+        if (source != null && (source == jda || source == pendingJda)) {
+            warnRateLimited(
+                    "gateway-invalidated",
+                    "Discord gateway session was invalidated; JDA will start a fresh session.");
+        }
+    }
+
+    public void onGatewaySessionRecreate(JDA source) {
+        if (source != null && source == jda) {
+            lastConnectionState = "CONNECTED";
+            hasConnected = true;
+            infoLogger.accept("Discord gateway session recreated.");
+        }
+    }
+
+    public void onGatewayShutdown(JDA source, CloseCode closeCode, int code) {
+        if (!stopping && source != null && (source == jda || source == pendingJda)) {
+            warnRateLimited(
+                    "gateway-shutdown",
+                    formatGatewayShutdownDiagnostic(closeCode, code));
+        }
+    }
+
+    public void onGatewayException(JDA source, Throwable cause) {
+        if (source != null && (source == jda || source == pendingJda)) {
+            warnRateLimited(
+                    "gateway-exception",
+                    formatFailureDiagnostic(
+                            "Discord gateway encountered an unexpected exception", cause));
+        }
+    }
+
+    static String formatFailureDiagnostic(String baseMessage, Throwable error) {
+        String prefix = baseMessage == null || baseMessage.isBlank()
+                ? "Discord operation failed"
+                : baseMessage.endsWith(".")
+                        ? baseMessage.substring(0, baseMessage.length() - 1)
+                        : baseMessage;
+        if (error == null) {
+            return prefix + " (UnknownError).";
+        }
+
+        List<String> details = new ArrayList<>();
+        details.add(simpleTypeName(error));
+        if (error instanceof ErrorResponseException apiError) {
+            details.add("code=" + apiError.getErrorCode());
+            Response response = apiError.getResponse();
+            if (response != null && response.code > 0) {
+                details.add("HTTP " + response.code);
+            }
+            ErrorResponse errorResponse = apiError.getErrorResponse();
+            if (errorResponse != null && errorResponse.getMeaning() != null
+                    && !errorResponse.getMeaning().isBlank()) {
+                details.add(errorResponse.getMeaning());
+            }
+        } else if (error instanceof PermissionException permissionError) {
+            Permission permission = permissionError.getPermission();
+            if (permission != null) {
+                details.add("missing permission=" + permission.getName());
+            }
+        } else if (error instanceof RateLimitedException rateLimited) {
+            details.add("retryAfterMs=" + rateLimited.getRetryAfter());
+        } else if (error.getCause() != null && error.getCause() != error) {
+            details.add("cause=" + simpleTypeName(error.getCause()));
+        }
+        return prefix + " (" + String.join(", ", details) + ").";
+    }
+
+    static String formatGatewayDisconnectDiagnostic(CloseCode closeCode, boolean closedByServer) {
+        if (closeCode == null) {
+            return "Discord gateway disconnected; JDA will attempt to resume or reconnect.";
+        }
+        String origin = closedByServer ? "server" : "client";
+        if (!closeCode.isReconnect()) {
+            return "Discord gateway disconnected by " + origin + " with non-reconnectable close code "
+                    + closeCode.getCode() + " (" + closeCode.getMeaning()
+                    + "). Check bot token and configured gateway intents.";
+        }
+        return "Discord gateway disconnected by " + origin + " (code "
+                + closeCode.getCode() + ": " + closeCode.getMeaning()
+                + "); JDA will attempt to resume or reconnect.";
+    }
+
+    static String formatGatewayShutdownDiagnostic(CloseCode closeCode, int code) {
+        if (closeCode != null) {
+            return "Discord gateway shut down (code " + closeCode.getCode()
+                    + ": " + closeCode.getMeaning() + ").";
+        }
+        return "Discord gateway shut down (code " + code + ").";
+    }
+
+    private static String simpleTypeName(Throwable throwable) {
+        String simpleName = throwable.getClass().getSimpleName();
+        return simpleName.isEmpty() ? throwable.getClass().getName() : simpleName;
     }
 
     private void checkConnectionHealth() {
@@ -745,7 +908,7 @@ public final class DiscordService {
 
     private void warnRateLimited(String category, String message) {
         if (diagnostics.shouldEmit(category)) {
-            plugin.getLogger().warning(message);
+            warningLogger.accept(message);
         }
     }
 }

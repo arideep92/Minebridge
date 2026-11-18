@@ -30,13 +30,146 @@ class ConfigValidationTest {
     }
 
     @Test
+    void validatesDiscordSnowflakeIdsWithinUnsigned64BitRange() {
+        assertTrue(ConfigManager.isValidSnowflake("12345678901234567"));
+        assertTrue(ConfigManager.isValidSnowflake("123456789012345678"));
+        assertTrue(ConfigManager.isValidSnowflake("1234567890123456789"));
+        assertTrue(ConfigManager.isValidSnowflake("12345678901234567890"));
+        assertTrue(ConfigManager.isValidSnowflake("18446744073709551615"));
+
+        assertFalse(ConfigManager.isValidSnowflake("18446744073709551616"));
+        assertFalse(ConfigManager.isValidSnowflake("99999999999999999999"));
+        assertFalse(ConfigManager.isValidSnowflake("1234567890123456"));
+        assertFalse(ConfigManager.isValidSnowflake("123456789012345678901"));
+        assertFalse(ConfigManager.isValidSnowflake(null));
+        assertFalse(ConfigManager.isValidSnowflake(""));
+        assertFalse(ConfigManager.isValidSnowflake("   "));
+        assertFalse(ConfigManager.isValidSnowflake("not-a-channel"));
+        assertFalse(ConfigManager.isValidSnowflake("1234567890123456a"));
+        assertFalse(ConfigManager.isValidSnowflake("-12345678901234567"));
+        assertFalse(ConfigManager.isValidSnowflake(" 12345678901234567 "));
+    }
+
+    @Test
     void validatesDiscordSnowflakeChannelIds() {
         assertFalse(ConfigManager.isValidChannelId(null));
         assertFalse(ConfigManager.isValidChannelId(""));
+        assertFalse(ConfigManager.isValidChannelId("   "));
         assertFalse(ConfigManager.isValidChannelId("not-a-channel"));
         assertFalse(ConfigManager.isValidChannelId("1234567890123456"));
+        assertFalse(ConfigManager.isValidChannelId("18446744073709551616"));
         assertTrue(ConfigManager.isValidChannelId("12345678901234567"));
+        assertTrue(ConfigManager.isValidChannelId("123456789012345678"));
+        assertTrue(ConfigManager.isValidChannelId("1234567890123456789"));
         assertTrue(ConfigManager.isValidChannelId("12345678901234567890"));
+        assertTrue(ConfigManager.isValidChannelId("18446744073709551615"));
+    }
+
+    @Test
+    void acceptsValidSnowflakeIdsAndRejectsMalformedChannelIdsInConfigurationValidation() {
+        assertTrue(ConfigManager.validateConfiguration(
+                "valid-test-token", "12345678901234567").isEmpty());
+        assertTrue(ConfigManager.validateConfiguration(
+                "valid-test-token", "123456789012345678").isEmpty());
+        assertTrue(ConfigManager.validateConfiguration(
+                "valid-test-token", "1234567890123456789").isEmpty());
+        assertTrue(ConfigManager.validateConfiguration(
+                "valid-test-token", "18446744073709551615").isEmpty());
+
+        var overflowErrors = ConfigManager.validateConfiguration(
+                "valid-test-token", "18446744073709551616");
+        assertEquals(1, overflowErrors.size());
+        assertTrue(overflowErrors.getFirst().contains("discord.channel-id"));
+
+        var blankErrors = ConfigManager.validateConfiguration("valid-test-token", "   ");
+        assertEquals(1, blankErrors.size());
+        assertTrue(blankErrors.getFirst().contains("discord.channel-id"));
+
+        var nonNumericErrors = ConfigManager.validateConfiguration("valid-test-token", "abc123");
+        assertEquals(1, nonNumericErrors.size());
+        assertTrue(nonNumericErrors.getFirst().contains("discord.channel-id"));
+    }
+
+    @Test
+    void allowsBlankChannelIdWhenAllDiscordDependentFeaturesAreDisabled() {
+        YamlConfiguration configuration = discordDisabledConfiguration();
+        configuration.set("discord.channel-id", "");
+        ConfigManager manager = new ConfigManager(null);
+
+        var candidate = manager.candidateFrom(configuration, null);
+
+        assertTrue(candidate.valid(), candidate.errors().toString());
+        assertFalse(ConfigManager.requiresDiscordChannel(candidate.settings()));
+        assertTrue(ConfigManager.validateConfiguration(candidate.settings()).isEmpty());
+        manager.commit(candidate);
+        assertTrue(manager.validationErrors().isEmpty());
+    }
+
+    @Test
+    void stillRejectsMalformedNonBlankChannelIdWhenDiscordFeaturesAreDisabled() {
+        YamlConfiguration invalidText = discordDisabledConfiguration();
+        invalidText.set("discord.channel-id", "not-a-channel");
+        var textCandidate = new ConfigManager(null).candidateFrom(invalidText, null);
+        assertFalse(textCandidate.valid());
+        assertTrue(textCandidate.errors().stream()
+                .anyMatch(error -> error.contains("discord.channel-id")));
+
+        YamlConfiguration overflow = discordDisabledConfiguration();
+        overflow.set("discord.channel-id", "18446744073709551616");
+        var overflowCandidate = new ConfigManager(null).candidateFrom(overflow, null);
+        assertFalse(overflowCandidate.valid());
+        assertTrue(overflowCandidate.errors().stream()
+                .anyMatch(error -> error.contains("discord.channel-id")));
+    }
+
+    @Test
+    void requiresChannelIdWhenAnyDiscordDependentFeatureIsEnabled() {
+        YamlConfiguration chatOnly = discordDisabledConfiguration();
+        chatOnly.set("features.chat-relay", true);
+        assertFalse(new ConfigManager(null).candidateFrom(chatOnly, null).valid());
+
+        YamlConfiguration playerEventsOnly = discordDisabledConfiguration();
+        playerEventsOnly.set("features.join-leave-notifications", true);
+        playerEventsOnly.set("discord-events.enabled", true);
+        playerEventsOnly.set("discord-events.embeds.enabled", true);
+        playerEventsOnly.set("discord-events.player-events.enabled", true);
+        playerEventsOnly.set("discord-events.player-events.join", true);
+        assertFalse(new ConfigManager(null).candidateFrom(playerEventsOnly, null).valid());
+
+        YamlConfiguration deathsOnly = discordDisabledConfiguration();
+        deathsOnly.set("death-messages.enabled", true);
+        deathsOnly.set("death-messages.discord.enabled", true);
+        deathsOnly.set("discord-events.enabled", true);
+        deathsOnly.set("discord-events.embeds.enabled", true);
+        deathsOnly.set("discord-events.deaths.enabled", true);
+        deathsOnly.set("discord-events.deaths.player-kill", true);
+        assertFalse(new ConfigManager(null).candidateFrom(deathsOnly, null).valid());
+
+        YamlConfiguration achievementsOnly = discordDisabledConfiguration();
+        achievementsOnly.set("achievements.enabled", true);
+        achievementsOnly.set("achievements.discord.enabled", true);
+        achievementsOnly.set("discord-events.enabled", true);
+        achievementsOnly.set("discord-events.embeds.enabled", true);
+        achievementsOnly.set("discord-events.achievements.enabled", true);
+        assertFalse(new ConfigManager(null).candidateFrom(achievementsOnly, null).valid());
+    }
+
+    @Test
+    void candidateChannelRequirementUsesCandidateSettingsRatherThanCurrentSettings() {
+        ConfigManager manager = new ConfigManager(null);
+        manager.commit(manager.candidateFrom(validConfiguration(), null));
+
+        var disableDiscordCandidate =
+                manager.candidateFrom(discordDisabledConfiguration(), null);
+        assertTrue(disableDiscordCandidate.valid(), disableDiscordCandidate.errors().toString());
+        manager.commit(disableDiscordCandidate);
+
+        YamlConfiguration reenableChatWithoutChannel = discordDisabledConfiguration();
+        reenableChatWithoutChannel.set("features.chat-relay", true);
+        var reenableCandidate = manager.candidateFrom(reenableChatWithoutChannel, null);
+        assertFalse(reenableCandidate.valid());
+        assertTrue(reenableCandidate.errors().stream()
+                .anyMatch(error -> error.contains("discord.channel-id")));
     }
 
     @Test
@@ -326,6 +459,33 @@ class ConfigValidationTest {
                 "messages.player-list",
                 "&7Online players (&f{online}&7/&f{max}&7): {players}");
         messages.forEach(configuration::set);
+        return configuration;
+    }
+
+    private static YamlConfiguration discordDisabledConfiguration() {
+        YamlConfiguration configuration = validConfiguration();
+        configuration.set("discord.channel-id", "");
+        configuration.set("features.chat-relay", false);
+        configuration.set("features.join-leave-notifications", false);
+        configuration.set("features.server-status", true);
+        configuration.set("features.player-list", true);
+        configuration.set("death-messages.enabled", true);
+        configuration.set("death-messages.minecraft.enabled", true);
+        configuration.set("death-messages.discord.enabled", false);
+        configuration.set("achievements.enabled", true);
+        configuration.set("achievements.minecraft.enabled", true);
+        configuration.set("achievements.discord.enabled", false);
+        configuration.set("discord-events.enabled", false);
+        configuration.set("discord-events.embeds.enabled", false);
+        configuration.set("discord-events.player-events.enabled", false);
+        configuration.set("discord-events.player-events.join", false);
+        configuration.set("discord-events.player-events.leave", false);
+        configuration.set("discord-events.player-events.first-join", false);
+        configuration.set("discord-events.achievements.enabled", false);
+        configuration.set("discord-events.deaths.enabled", false);
+        configuration.set("discord-events.deaths.player-kill", false);
+        configuration.set("discord-events.deaths.mob-kill", false);
+        configuration.set("discord-events.deaths.environmental", false);
         return configuration;
     }
 }

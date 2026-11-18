@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.minebridge'
-version = '1.2.0'
+version = '1.2.1'
 
 repositories {
     mavenCentral()
@@ -18,7 +18,11 @@ repositories {
 
 dependencies {
     compileOnly 'org.spigotmc:spigot-api:1.20.6-R0.1-SNAPSHOT'
-    implementation 'net.dv8tion:JDA:5.6.1'
+    implementation('net.dv8tion:JDA:5.6.1') {
+        // MineBridge does not use Discord voice/audio features.
+        exclude group: 'club.minnced', module: 'opus-java'
+        exclude group: 'com.google.crypto.tink', module: 'tink'
+    }
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
     testImplementation 'org.spigotmc:spigot-api:1.20.6-R0.1-SNAPSHOT'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
@@ -42,6 +46,26 @@ tasks.jar {
 
 tasks.shadowJar {
     archiveClassifier = ''
+    mergeServiceFiles()
+
+    // Non-runtime build and Kotlin compiler metadata.
+    exclude 'META-INF/maven/**'
+    exclude 'META-INF/proguard/**'
+    exclude '**/*.kotlin_metadata'
+    exclude '**/*.kotlin_builtins'
+    exclude '**/*.kotlin_module'
+
+    // Verified-unused Trove4j primitive collections and wrappers (JDA 5.6.1 uses Int/Long/Object only).
+    exclude 'gnu/trove/**/*Byte*'
+    exclude 'gnu/trove/**/*Short*'
+    exclude 'gnu/trove/**/*Char*'
+    exclude 'gnu/trove/**/*Float*'
+    exclude 'gnu/trove/**/*Double*'
+    exclude 'gnu/trove/decorator/**'
+    exclude 'gnu/trove/impl/unmodifiable/**'
+    exclude 'gnu/trove/TCollections.class'
+    exclude 'gnu/trove/TDecorators.class'
+
     finalizedBy tasks.register('copyChangelog', Copy) {
         from layout.projectDirectory.file('CHANGELOG.md')
         into layout.buildDirectory.dir('libs')

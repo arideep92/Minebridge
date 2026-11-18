@@ -11,6 +11,61 @@ release.
 
 - No unreleased changes.
 
+## [1.2.1] - 2026-11-18
+
+### Added
+
+- Track rejected outgoing Discord messages with an `AtomicLong` counter
+  (`DiscordService.getOutgoingDropped()`) that increments when the outbound
+  queue is full or closed, and expose it as `outgoingDropped` in
+  `MineBridgeStatus` and `/minebridge status` output.
+
+### Changed
+
+- Set the project and plugin metadata version to 1.2.1.
+- Optimize shaded JAR packaging (reducing the distributable JAR from 19.24 MB
+  to ~8.78 MB) by excluding JDA's unused Discord voice/audio transitive
+  dependencies (`club.minnced:opus-java`, `net.java.dev.jna:jna`,
+  `com.google.crypto.tink:tink`, `com.google.protobuf:protobuf-java`,
+  `com.google.code.gson:gson`, `com.google.code.findbugs:jsr305`, and
+  `com.google.errorprone:error_prone_annotations`), stripping non-runtime
+  Maven/Proguard/Kotlin compiler metadata, excluding verified-unused Trove4j
+  `Byte`/`Short`/`Char`/`Float`/`Double`, decorator, and unmodifiable classes,
+  and enabling Shadow `mergeServiceFiles()`. Discord voice/audio functionality
+  is intentionally excluded and unsupported.
+- Improve outgoing Discord send failure diagnostics to include the exception
+  type and safe structured context (Discord API error code, HTTP status,
+  missing permission, retry delay, or cause type) via rate-limited warnings
+  without logging bot tokens or message content.
+- Extend `DiscordGatewayListener` and `DiscordService` with null-safe
+  diagnostic callbacks for JDA 5.6.1 gateway events (`onSessionDisconnect`
+  close codes, `onSessionInvalidate`, `onSessionRecreate`, `onShutdown`, and
+  `onException`) without duplicating JDA's built-in reconnection handling.
+
+### Fixed
+
+- Enforce Discord Snowflake validation (`ConfigManager.isValidSnowflake`) for
+  channel IDs, accepting 17-20 decimal digits within the unsigned 64-bit
+  integer range (`<= 18446744073709551615`), and delegate
+  `ConfigManager.isValidChannelId` to it for backward compatibility.
+- Make `discord.channel-id` optional when all Discord-dependent features are
+  disabled in candidate configuration validation while still rejecting
+  non-blank malformed channel IDs and avoiding blank channel lookups in
+  `DiscordService`.
+
+### Testing
+
+- Add unit tests for Discord Snowflake and channel ID validation covering
+  17-20 digit IDs, the maximum unsigned 64-bit value, out-of-range 20-digit
+  values, null/blank/non-numeric inputs, optional channel IDs when Discord
+  features are disabled, and candidate configuration validation.
+- Add unit tests for `outgoingDropped` queue overflow and queue-closed
+  counting, `MineBridgeStatus` `long` formatting, outgoing send exception
+  diagnostics without secret leakage, and null-safe `DiscordGatewayListener`
+  gateway event diagnostics.
+- Verified static bytecode integrity and JAR contents of the optimized
+  distribution on Java 21 without enabling Shadow `minimize()`.
+
 ## [1.2.0] - 2026-11-10
 
 ### Added

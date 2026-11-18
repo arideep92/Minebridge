@@ -36,7 +36,7 @@ Build the shaded plugin JAR from the repository root:
 ./gradlew build
 ```
 
-The distributable is `build/libs/MineBridge-1.2.0.jar` for the current project
+The distributable is `build/libs/MineBridge-1.2.1.jar` for the current project
 version. Place it in the `plugins/` directory of the server you have chosen to
 test, then start the server once to create `plugins/MineBridge/config.yml`.
 Stop the server before replacing the JAR during an upgrade.
@@ -123,7 +123,7 @@ only balanced, supported placeholders:
 | Setting | Default | Description |
 | --- | --- | --- |
 | `discord.bot-token` | `""` | Bot token; use `MINEBRIDGE_BOT_TOKEN` instead when possible. |
-| `discord.channel-id` | `""` | Required 17-20 digit ID of the Discord text channel. |
+| `discord.channel-id` | `""` | 17-20 digit unsigned 64-bit Discord text channel ID (required when any Discord-dependent feature is enabled; optional when all Discord features are disabled). |
 | `features.chat-relay` | `true` | Enable Minecraft and Discord chat relay. |
 | `features.join-leave-notifications` | `true` | Enable player join/leave notifications. |
 | `features.server-status` | `true` | Enable `/minebridge server`. |
@@ -370,9 +370,9 @@ messages replenished over 1 second.
   the placeholders listed above. The player list joins names in the order
   returned by the server API, separated by commas; names are display text only.
 - `/minebridge status` reports connection state, cached channel availability,
-  outgoing queue size/capacity, plugin uptime, and the chat-relay and
-  join/leave-notification toggles. It does not make a REST request to check
-  channel availability.
+  outgoing queue size/capacity, outgoing dropped-message count, plugin uptime,
+  and the chat-relay and join/leave-notification toggles. It does not make a
+  REST request to check channel availability.
 - Help and tab completion hide `/minebridge reload` from users without
   `minebridge.admin`.
 - A `config.yml` validation warning identifies the setting to correct without
