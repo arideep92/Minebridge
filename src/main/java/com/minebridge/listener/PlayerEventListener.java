@@ -33,15 +33,6 @@ public final class PlayerEventListener implements Listener {
         this(new DiscordEventNotifier(discord, webhook, config), config, null);
     }
 
-    public PlayerEventListener(WebhookService webhook, ConfigManager config) {
-        this(new DiscordEventNotifier(webhook, config), config);
-    }
-
-    public PlayerEventListener(
-            DiscordService discord, WebhookService webhook, ConfigManager config) {
-        this(new DiscordEventNotifier(discord, webhook, config), config);
-    }
-
     public PlayerEventListener(DiscordEventNotifier notifier, ConfigManager config) {
         this(notifier, config, null);
     }
