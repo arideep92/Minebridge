@@ -111,6 +111,12 @@ features:
   # Enable /minebridge players command.
   player-list: true
 
+update-checker:
+  # Enable periodic checks for newer MineBridge releases on Modrinth.
+  # When enabled, MineBridge will check once on startup and notify admins
+  # in-game if a newer version is available.
+  enabled: true
+
 death-messages:
   enabled: true
 

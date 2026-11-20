@@ -429,6 +429,44 @@ class ConfigValidationTest {
         assertEquals(messages, settings.messages());
         assertTrue(settings.serverStatusEnabled());
         assertTrue(settings.playerListEnabled());
+        assertTrue(settings.updateCheckerEnabled());
+    }
+
+    @Test
+    void updateCheckerEnabledDefaultsToTrueInLegacyConfiguration() {
+        YamlConfiguration config = validConfiguration();
+        config.set("update-checker", null);
+
+        var candidate = new ConfigManager(null).candidateFrom(config, null);
+        assertTrue(candidate.valid(), candidate.errors().toString());
+        assertTrue(candidate.settings().updateCheckerEnabled());
+    }
+
+    @Test
+    void updateCheckerCanBeExplicitlyDisabled() {
+        YamlConfiguration config = validConfiguration();
+        config.set("update-checker.enabled", false);
+
+        var candidate = new ConfigManager(null).candidateFrom(config, null);
+        assertTrue(candidate.valid(), candidate.errors().toString());
+        assertFalse(candidate.settings().updateCheckerEnabled());
+    }
+
+    @Test
+    void rejectsInvalidUpdateCheckerTypes() {
+        YamlConfiguration config = validConfiguration();
+        config.set("update-checker", "not-a-section");
+
+        var candidate = new ConfigManager(null).candidateFrom(config, null);
+        assertFalse(candidate.valid());
+        assertTrue(candidate.errors().contains("update-checker must be a configuration section."));
+
+        YamlConfiguration nonBoolConfig = validConfiguration();
+        nonBoolConfig.set("update-checker.enabled", "invalid-boolean");
+
+        var candidate2 = new ConfigManager(null).candidateFrom(nonBoolConfig, null);
+        assertFalse(candidate2.valid());
+        assertTrue(candidate2.errors().contains("update-checker.enabled must be true or false."));
     }
 
     private static Map<String, Object> validTemplates() {

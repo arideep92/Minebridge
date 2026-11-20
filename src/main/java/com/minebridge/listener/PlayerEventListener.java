@@ -8,6 +8,7 @@ import com.minebridge.discord.DiscordService;
 import com.minebridge.discord.RelayMessageFormatter;
 import com.minebridge.discord.WebhookService;
 import com.minebridge.config.ConfigManager;
+import com.minebridge.update.UpdateChecker;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -16,31 +17,42 @@ public final class PlayerEventListener implements Listener {
 
     private final DiscordEventNotifier notifier;
     private final ConfigManager config;
+    private final UpdateChecker updateChecker;
     private final DiscordEventDeduplicator deduplicator = new DiscordEventDeduplicator();
 
     public PlayerEventListener(DiscordService discord, ConfigManager config) {
-        this(new DiscordEventNotifier(discord, config), config);
+        this(new DiscordEventNotifier(discord, config), config, null);
     }
 
     public PlayerEventListener(WebhookService webhook, ConfigManager config) {
-        this(new DiscordEventNotifier(webhook, config), config);
+        this(new DiscordEventNotifier(webhook, config), config, null);
     }
 
     public PlayerEventListener(
             DiscordService discord, WebhookService webhook, ConfigManager config) {
-        this(new DiscordEventNotifier(discord, webhook, config), config);
+        this(new DiscordEventNotifier(discord, webhook, config), config, null);
     }
 
     public PlayerEventListener(DiscordEventNotifier notifier, ConfigManager config) {
+        this(notifier, config, null);
+    }
+
+    public PlayerEventListener(
+            DiscordEventNotifier notifier, ConfigManager config, UpdateChecker updateChecker) {
         this.notifier = notifier;
         this.config = config;
+        this.updateChecker = updateChecker;
     }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        var player = event.getPlayer();
+        if (updateChecker != null && updateChecker.hasCachedUpdate()) {
+            updateChecker.notifyIfAdmin(player, updateChecker.getCachedResult());
+        }
+
         ConfigManager.Settings current = config.currentSettings();
         ConfigManager.DiscordEventsSettings settings = current.discordEvents();
-        var player = event.getPlayer();
         boolean firstJoin = PlayerEventClassifier.isFirstJoin(player.hasPlayedBefore());
         if (!current.eventsEnabled()
                 || !DiscordEventsPolicy.playerEventEnabled(settings, true, firstJoin)

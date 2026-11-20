@@ -26,6 +26,9 @@ MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for
 - **Optional LuckPerms Integration**:
   - Soft-dependency integration: automatically resolves player group prefixes (`{prefix}`) in chat templates using cached metadata without blocking the server thread.
   - Works seamlessly with zero configuration if LuckPerms is absent.
+- **Modrinth Update Checker**:
+  - Automatically checks for newer published releases on Modrinth once during startup.
+  - Delivers semantic version release alerts to the server console and in-game administrators (`minebridge.admin`) without blocking the server thread.
 - **Reliability & Rate Limiting**:
   - Bounded FIFO queues for outgoing messages.
   - Automatic Discord HTTP 429 rate-limit backoff and retry handling (`Retry-After` / `retry_after`).
@@ -135,6 +138,7 @@ MineBridge includes a built-in soft dependency on [LuckPerms](https://luckperms.
 | `discord.webhook.avatar-url` | `""` | Webhook avatar image URL. Supports `{player}`. |
 | `discord.embed.footer.text` | `""` | Embed footer text. Supports `{server}`. |
 | `discord.embed.footer.icon-url` | `""` | Embed footer icon URL (HTTP/HTTPS). |
+| `update-checker.enabled` | `true` | Check Modrinth for newer MineBridge releases on startup and alert administrators. |
 | `server.name` | `"Minecraft Server"` | Server name used by `{server}` placeholder. |
 
 ### Message Templates and Placeholders

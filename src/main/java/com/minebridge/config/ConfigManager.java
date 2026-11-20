@@ -68,7 +68,7 @@ public final class ConfigManager {
             IntegrationMode.BOT,
             "", "", true, true, SAFE_MESSAGES, true, true,
             defaultDeathSettings(), defaultAchievementSettings(), defaultDiscordEventsSettings(),
-            defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+            defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true);
 
     public record WebhookSettings(String url, String username, String avatarUrl) {
         public WebhookSettings {
@@ -107,7 +107,8 @@ public final class ConfigManager {
             DiscordEventsSettings discordEvents,
             WebhookSettings webhook,
             String serverName,
-            EmbedFooterSettings embedFooter) {
+            EmbedFooterSettings embedFooter,
+            boolean updateCheckerEnabled) {
         public Settings {
             mode = mode == null ? IntegrationMode.BOT : mode;
             messages = Map.copyOf(messages);
@@ -116,6 +117,7 @@ public final class ConfigManager {
             embedFooter = embedFooter == null ? defaultEmbedFooterSettings() : embedFooter;
         }
 
+        // Convenience constructors that preserve backward compatibility by defaulting updateCheckerEnabled to true.
         public Settings(
                 String botToken,
                 String channelId,
@@ -130,7 +132,7 @@ public final class ConfigManager {
             this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
                     messages, serverStatusEnabled, playerListEnabled,
                     deathMessages, achievements, discordEvents,
-                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true);
         }
 
         public Settings(
@@ -145,7 +147,7 @@ public final class ConfigManager {
                     messages, serverStatusEnabled, playerListEnabled,
                     defaultDeathSettings(), defaultAchievementSettings(),
                     defaultDiscordEventsSettings(),
-                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true);
         }
 
         public Settings(
@@ -160,7 +162,7 @@ public final class ConfigManager {
             this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
                     messages, serverStatusEnabled, playerListEnabled,
                     deathMessages, defaultAchievementSettings(), defaultDiscordEventsSettings(),
-                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true);
         }
 
         public Settings(
@@ -176,7 +178,7 @@ public final class ConfigManager {
             this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
                     messages, serverStatusEnabled, playerListEnabled, deathMessages,
                     achievements, defaultDiscordEventsSettings(),
-                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true);
         }
 
         public Settings(
@@ -188,7 +190,7 @@ public final class ConfigManager {
             this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
                     messages, true, true, defaultDeathSettings(), defaultAchievementSettings(),
                     defaultDiscordEventsSettings(),
-                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true);
         }
 
         public Settings(
@@ -208,7 +210,28 @@ public final class ConfigManager {
             this(mode, botToken, channelId, chatEnabled, eventsEnabled,
                     messages, serverStatusEnabled, playerListEnabled,
                     deathMessages, achievements, discordEvents,
-                    webhook, serverName, defaultEmbedFooterSettings());
+                    webhook, serverName, defaultEmbedFooterSettings(), true);
+        }
+
+        public Settings(
+                IntegrationMode mode,
+                String botToken,
+                String channelId,
+                boolean chatEnabled,
+                boolean eventsEnabled,
+                Map<String, String> messages,
+                boolean serverStatusEnabled,
+                boolean playerListEnabled,
+                DeathSettings deathMessages,
+                AchievementSettings achievements,
+                DiscordEventsSettings discordEvents,
+                WebhookSettings webhook,
+                String serverName,
+                EmbedFooterSettings embedFooter) {
+            this(mode, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled,
+                    deathMessages, achievements, discordEvents,
+                    webhook, serverName, embedFooter, true);
         }
     }
 
@@ -349,6 +372,13 @@ public final class ConfigManager {
         String serverName = readStringOrDefault(
                 configuration, "server.name", "Minecraft Server", errors);
 
+        Object updateCheckerSection = configuration.get("update-checker");
+        if (updateCheckerSection != null && !(updateCheckerSection instanceof ConfigurationSection)) {
+            errors.add("update-checker must be a configuration section.");
+        }
+        boolean updateCheckerEnabled = readBoolean(
+                configuration, "update-checker.enabled", true, errors);
+
         Map<String, String> messages = new java.util.HashMap<>();
         Map<String, Object> messageValues = new java.util.HashMap<>();
         for (String key : MESSAGE_KEYS) {
@@ -383,7 +413,8 @@ public final class ConfigManager {
                     discordEvents,
                     webhook,
                     serverName,
-                    embedFooter), List.of());
+                    embedFooter,
+                    updateCheckerEnabled), List.of());
         }
         return new Candidate(null, errors);
     }
@@ -1156,6 +1187,10 @@ public final class ConfigManager {
 
     public boolean eventsEnabled() {
         return settings.eventsEnabled();
+    }
+
+    public boolean updateCheckerEnabled() {
+        return settings.updateCheckerEnabled();
     }
 
     public String message(String key, String fallback) {

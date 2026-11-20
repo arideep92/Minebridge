@@ -27,9 +27,9 @@ class LifecycleManagerTest {
 
     private static final String BOT_TOKEN = "synthetic-test-bot-token-12345";
     private static final String CHANNEL_ID = "123456789012345678";
-    private static final String WEBHOOK_SECRET = "super-secret-webhook-token-XYZ999";
+    private static final String WEBHOOK_SECRET = "invalid-test-token-placeholder";
     private static final String WEBHOOK_URL =
-            "https://discord.com/api/webhooks/123456789012345678/" + WEBHOOK_SECRET;
+            "https://invalid.discord.test/api/webhooks/invalid-placeholder/" + WEBHOOK_SECRET;
 
     private static Call.Factory noopCallFactory() {
         return request -> new Call() {
@@ -52,6 +52,33 @@ class LifecycleManagerTest {
         };
     }
 
+    private ConfigManager.Settings createWebhookSettings(String webhookUrl) {
+        ConfigManager.Candidate botCandidate = createCandidate(botConfigYaml());
+        ConfigManager.Settings base = botCandidate.settings();
+        return new ConfigManager.Settings(
+                IntegrationMode.WEBHOOK,
+                base.botToken(),
+                base.channelId(),
+                base.chatEnabled(),
+                base.eventsEnabled(),
+                base.messages(),
+                base.serverStatusEnabled(),
+                base.playerListEnabled(),
+                base.deathMessages(),
+                base.achievements(),
+                base.discordEvents(),
+                new ConfigManager.WebhookSettings(webhookUrl, "{player}", ""),
+                base.serverName(),
+                base.embedFooter(),
+                base.updateCheckerEnabled());
+    }
+
+    private ConfigManager.Candidate validWebhookCandidate() {
+        return new ConfigManager.Candidate(
+                createWebhookSettings("https://discord.com/api/webhooks/123456789012345678/mock-token"),
+                List.of());
+    }
+
     private ConfigManager.Candidate createCandidate(String yaml) {
         YamlConfiguration config = new YamlConfiguration();
         try {
@@ -72,6 +99,11 @@ class LifecycleManagerTest {
     }
 
     private ConfigManager createConfig(String yaml) {
+        if (yaml.contains("WEBHOOK")) {
+            ConfigManager manager = new ConfigManager(null);
+            manager.commit(new ConfigManager.Candidate(createWebhookSettings(WEBHOOK_URL), List.of()));
+            return manager;
+        }
         ConfigManager.Candidate candidate = createCandidate(yaml);
         ConfigManager manager = new ConfigManager(null);
         manager.commit(candidate);
@@ -145,6 +177,7 @@ class LifecycleManagerTest {
 
         LifecycleManager manager = new LifecycleManager(
                 config,
+                () -> validWebhookCandidate(),
                 new LuckPermsHook(() -> false, uuid -> ""),
                 cfg -> {
                     discordCreated.incrementAndGet();
@@ -204,7 +237,8 @@ class LifecycleManagerTest {
         assertNull(manager.getWebhookService());
 
         // Switch config candidate to WEBHOOK mode
-        ConfigManager.Candidate webhookCandidate = createCandidate(webhookConfigYaml());
+        ConfigManager.Candidate webhookCandidate =
+                validWebhookCandidate();
         ConfigManager.Candidate initialBotCandidate = createCandidate(botConfigYaml());
 
         AtomicReference<ConfigManager.Candidate> candidateRef =
@@ -248,7 +282,8 @@ class LifecycleManagerTest {
     @Test
     void webhookToBotReloadTransitionsCleanly() {
         ConfigManager configWithWebhook = createConfig(webhookConfigYaml());
-        ConfigManager.Candidate initialWebhookCandidate = createCandidate(webhookConfigYaml());
+        ConfigManager.Candidate initialWebhookCandidate =
+                validWebhookCandidate();
         ConfigManager.Candidate botCandidate = createCandidate(botConfigYaml());
 
         AtomicReference<ConfigManager.Candidate> candidateRef =
@@ -298,7 +333,8 @@ class LifecycleManagerTest {
     @Test
     void invalidConfigurationDuringReloadPreservesActiveState() {
         ConfigManager config = createConfig(webhookConfigYaml());
-        ConfigManager.Candidate initialWebhookCandidate = createCandidate(webhookConfigYaml());
+        ConfigManager.Candidate initialWebhookCandidate =
+                validWebhookCandidate();
         ConfigManager.Candidate invalidCandidate = new ConfigManager.Candidate(
                 config.currentSettings(), List.of("Invalid webhook URL host"));
 
@@ -388,8 +424,11 @@ class LifecycleManagerTest {
     @Test
     void repeatedReloadReusesListenersWithoutDuplication() {
         ConfigManager config = createConfig(webhookConfigYaml());
+        ConfigManager.Candidate validWebhookCandidate =
+                validWebhookCandidate();
         LifecycleManager manager = new LifecycleManager(
                 config,
+                () -> validWebhookCandidate,
                 new LuckPermsHook(() -> true, uuid -> "[Tester] "),
                 cfg -> new DiscordService(null, cfg, null, msg -> {}, msg -> {}),
                 cfg -> new WebhookService(cfg, noopCallFactory(), msg -> {}, msg -> {}),
@@ -422,6 +461,7 @@ class LifecycleManagerTest {
 
         LifecycleManager manager = new LifecycleManager(
                 config,
+                () -> validWebhookCandidate(),
                 new LuckPermsHook(() -> false, uuid -> ""),
                 cfg -> new DiscordService(null, cfg, null, msg -> {}, msg -> {}),
                 cfg -> new WebhookService(cfg, noopCallFactory(), msg -> {}, msg -> {}),
@@ -460,6 +500,7 @@ class LifecycleManagerTest {
         ConfigManager webhookConfig = createConfig(webhookConfigYaml());
         LifecycleManager webhookManager = new LifecycleManager(
                 webhookConfig,
+                () -> validWebhookCandidate(),
                 new LuckPermsHook(() -> true, uuid -> "[Admin] "),
                 cfg -> new DiscordService(null, cfg, null, logMessages::add, logMessages::add),
                 cfg -> new WebhookService(cfg, noopCallFactory(), logMessages::add, logMessages::add),
