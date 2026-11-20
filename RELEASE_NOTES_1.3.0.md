@@ -5,6 +5,7 @@ MineBridge 1.3.0 introduces Webhook Mode, embed footer customization, server pla
 ## Added
 
 - **Dual Integration Modes**: Choose between `BOT` mode (full two-way chat synchronization and embeds via Discord bot) and `WEBHOOK` mode (lightweight one-way outbound delivery via Discord webhooks).
+- **Modrinth Update Checker**: Automated, asynchronous startup check for published MineBridge releases on Modrinth via public API v2. Displays semantic release notifications to server console and in-game administrators (`minebridge.admin`) without blocking the server thread.
 - **Outgoing Webhook Integration**: Asynchronous, rate-limited delivery for Minecraft chat, player joins/leaves, deaths, and advancements via standard Discord Webhooks using OkHttp.
 - **Webhook Customization**: Configure webhook usernames and avatar URLs per message using `{player}` and `{server}` placeholders (e.g. avatar heads via `https://mc-heads.net/avatar/{player}/100`).
 - **Embed Footer Customization**: Set custom footer text and icon URLs on all Discord embeds with `{server}` placeholder support.

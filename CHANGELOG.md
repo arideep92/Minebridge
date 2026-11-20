@@ -16,6 +16,7 @@ release.
 ### Added
 
 - Dual integration modes: `BOT` (default) and `WEBHOOK`, configurable via `discord.mode`.
+- Modrinth Update Checker (`UpdateChecker`): Asynchronously checks for published, listed MineBridge releases on Modrinth once during startup, notifying console and online administrators (`minebridge.admin`) with semantic version comparison and clean shutdown lifecycle management.
 - Outgoing Minecraft-to-Discord Webhook support (`WebhookService`) with asynchronous HTTP delivery via OkHttp, supporting text chat, player joins/leaves, deaths, and advancements.
 - Custom Discord webhook username and avatar URL formatting with `{player}` and `{server}` placeholders.
 - Discord embed footer customization (`discord.embed.footer.text` and `icon-url`) with `{server}` placeholder expansion.

@@ -15,6 +15,7 @@ import com.minebridge.hook.LuckPermsHook;
 import com.minebridge.lifecycle.LifecycleManager;
 import com.minebridge.listener.ChatListener;
 import com.minebridge.listener.PlayerEventListener;
+import com.minebridge.update.UpdateChecker;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.IllegalPluginAccessException;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,6 +30,7 @@ public final class MineBridgePlugin extends JavaPlugin {
     private ConfigManager configManager;
     private LuckPermsHook luckPermsHook;
     private LifecycleManager lifecycleManager;
+    private UpdateChecker updateChecker;
     private BukkitTask outgoingTask;
 
     @Override
@@ -79,9 +81,37 @@ public final class MineBridgePlugin extends JavaPlugin {
         ChatListener chatListener = lifecycleManager.getChatListener();
         DiscordEventNotifier eventNotifier = lifecycleManager.getEventNotifier();
 
+        boolean updateCheckerEnabled = configManager.currentSettings().updateCheckerEnabled();
+        updateChecker = new UpdateChecker(
+                getDescription().getVersion(),
+                updateCheckerEnabled,
+                msg -> getLogger().info(msg),
+                msg -> getLogger().warning(msg)
+        );
+
+        if (updateCheckerEnabled) {
+            updateChecker.checkForUpdateAsync().thenAccept(result -> {
+                if (!isEnabled() || result == null) {
+                    return;
+                }
+                updateChecker.notifyConsole(result, msg -> getLogger().info(msg), msg -> getLogger().warning(msg));
+                if (result.updateAvailable()) {
+                    try {
+                        getServer().getScheduler().runTask(this, () -> {
+                            if (isEnabled()) {
+                                updateChecker.notifyAdmins(result, getServer().getOnlinePlayers());
+                            }
+                        });
+                    } catch (IllegalPluginAccessException | NoSuchMethodError ignored) {
+                        updateChecker.notifyAdmins(result, getServer().getOnlinePlayers());
+                    }
+                }
+            });
+        }
+
         getServer().getPluginManager().registerEvents(chatListener, this);
         getServer().getPluginManager().registerEvents(
-                new PlayerEventListener(eventNotifier, configManager), this);
+                new PlayerEventListener(eventNotifier, configManager, updateChecker), this);
         getServer().getPluginManager().registerEvents(
                 new DeathListener(new DeathMessageManager(this, configManager, eventNotifier)),
                 this);
@@ -104,6 +134,9 @@ public final class MineBridgePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (updateChecker != null) {
+            updateChecker.shutdown();
+        }
         if (lifecycleManager != null) {
             lifecycleManager.shutdown();
         }
@@ -166,5 +199,9 @@ public final class MineBridgePlugin extends JavaPlugin {
 
     public LuckPermsHook getLuckPermsHook() {
         return luckPermsHook;
+    }
+
+    public UpdateChecker getUpdateChecker() {
+        return updateChecker;
     }
 }
