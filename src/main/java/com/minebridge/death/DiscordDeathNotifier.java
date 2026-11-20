@@ -26,7 +26,8 @@ public final class DiscordDeathNotifier {
                 description,
                 context,
                 settings.embedColor(),
-                notifier.footer());
+                notifier.footer(),
+                notifier.footerIconUrl());
         notifier.send(channelId, embed);
     }
 }

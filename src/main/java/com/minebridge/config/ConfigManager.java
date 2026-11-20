@@ -4,6 +4,7 @@ import com.minebridge.MineBridgePlugin;
 import com.minebridge.achievement.AdvancementCategory;
 import com.minebridge.death.DeathCategory;
 import com.minebridge.discord.DiscordEmbedFactory;
+import com.minebridge.discord.IntegrationMode;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -31,15 +32,18 @@ public final class ConfigManager {
             "messages.server-status",
             "messages.player-list");
     private static final Map<String, Set<String>> MESSAGE_PLACEHOLDERS = Map.of(
-            "messages.minecraft-to-discord", Set.of("player", "message", "timestamp"),
+            "messages.minecraft-to-discord",
+            Set.of("player", "message", "timestamp", "server", "prefix"),
             "messages.discord-to-minecraft",
             Set.of("player", "display_name", "username", "message", "timestamp"),
-            "messages.player-join", Set.of("player", "timestamp"),
-            "messages.player-leave", Set.of("player", "timestamp"),
-            "messages.server-status", Set.of("online", "max"),
-            "messages.player-list", Set.of("online", "max", "players"));
+            "messages.player-join", Set.of("player", "timestamp", "server", "prefix"),
+            "messages.player-leave", Set.of("player", "timestamp", "server", "prefix"),
+            "messages.server-status", Set.of("online", "max", "server"),
+            "messages.player-list", Set.of("online", "max", "players", "server"));
     private static final int MAX_TEMPLATE_LENGTH = 2000;
     private static final Pattern SNOWFLAKE_PATTERN = Pattern.compile("[0-9]{17,20}");
+    private static final Pattern DISCORD_WEBHOOK_URL_PATTERN = Pattern.compile(
+            "^https://(discord\\.com|discordapp\\.com|canary\\.discord\\.com|ptb\\.discord\\.com)/api/webhooks/([0-9]{17,20})/([A-Za-z0-9_-]+)(?:\\?.*)?$");
     private static final BigInteger MAX_UNSIGNED_64_BIT = new BigInteger("18446744073709551615");
     private static final Map<String, String> SAFE_MESSAGES = Map.of(
             "messages.minecraft-to-discord", "**{player}**: {message}",
@@ -50,21 +54,47 @@ public final class ConfigManager {
             "messages.player-list",
             "&7Online players (&f{online}&7/&f{max}&7): {players}");
     private static final Set<String> DEATH_PLACEHOLDERS =
-            Set.of("victim", "killer", "cause", "category");
+            Set.of("victim", "killer", "cause", "category", "server", "prefix");
     private static final Set<String> DEATH_EMBED_PLACEHOLDERS =
-            Set.of("victim", "killer", "cause", "category", "message");
+            Set.of("victim", "killer", "cause", "category", "message", "server", "prefix");
     private static final Set<String> ACHIEVEMENT_PLACEHOLDERS =
-            Set.of("player", "title", "description", "category", "challenge");
+            Set.of("player", "title", "description", "category", "challenge", "server", "prefix");
     private static final Map<String, String> DEFAULT_ACHIEVEMENT_MESSAGES = Map.of(
             "normal", "&a✦ {player} has made the advancement [{title}]!",
             "challenge", "&6🏆 {player} has completed the challenge [{title}]!");
 
     private final MineBridgePlugin plugin;
     private volatile Settings settings = new Settings(
+            IntegrationMode.BOT,
             "", "", true, true, SAFE_MESSAGES, true, true,
-            defaultDeathSettings(), defaultAchievementSettings(), defaultDiscordEventsSettings());
+            defaultDeathSettings(), defaultAchievementSettings(), defaultDiscordEventsSettings(),
+            defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+
+    public record WebhookSettings(String url, String username, String avatarUrl) {
+        public WebhookSettings {
+            url = url == null ? "" : url.trim();
+            username = username == null || username.isBlank() ? "{player}" : username.trim();
+            avatarUrl = avatarUrl == null ? "" : avatarUrl.trim();
+        }
+    }
+
+    public record EmbedFooterSettings(String text, String iconUrl) {
+        public EmbedFooterSettings {
+            text = text == null || text.isBlank() ? DiscordEmbedFactory.DEFAULT_FOOTER : text.trim();
+            iconUrl = iconUrl == null ? "" : iconUrl.trim();
+        }
+    }
+
+    public static WebhookSettings defaultWebhookSettings() {
+        return new WebhookSettings("", "{player}", "");
+    }
+
+    public static EmbedFooterSettings defaultEmbedFooterSettings() {
+        return new EmbedFooterSettings(DiscordEmbedFactory.DEFAULT_FOOTER, "");
+    }
 
     public record Settings(
+            IntegrationMode mode,
             String botToken,
             String channelId,
             boolean chatEnabled,
@@ -74,9 +104,33 @@ public final class ConfigManager {
             boolean playerListEnabled,
             DeathSettings deathMessages,
             AchievementSettings achievements,
-            DiscordEventsSettings discordEvents) {
+            DiscordEventsSettings discordEvents,
+            WebhookSettings webhook,
+            String serverName,
+            EmbedFooterSettings embedFooter) {
         public Settings {
+            mode = mode == null ? IntegrationMode.BOT : mode;
             messages = Map.copyOf(messages);
+            webhook = webhook == null ? defaultWebhookSettings() : webhook;
+            serverName = serverName == null ? "Minecraft Server" : serverName;
+            embedFooter = embedFooter == null ? defaultEmbedFooterSettings() : embedFooter;
+        }
+
+        public Settings(
+                String botToken,
+                String channelId,
+                boolean chatEnabled,
+                boolean eventsEnabled,
+                Map<String, String> messages,
+                boolean serverStatusEnabled,
+                boolean playerListEnabled,
+                DeathSettings deathMessages,
+                AchievementSettings achievements,
+                DiscordEventsSettings discordEvents) {
+            this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled,
+                    deathMessages, achievements, discordEvents,
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
         }
 
         public Settings(
@@ -87,10 +141,11 @@ public final class ConfigManager {
                 Map<String, String> messages,
                 boolean serverStatusEnabled,
                 boolean playerListEnabled) {
-            this(botToken, channelId, chatEnabled, eventsEnabled, messages,
-                    serverStatusEnabled, playerListEnabled,
+            this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled,
                     defaultDeathSettings(), defaultAchievementSettings(),
-                    defaultDiscordEventsSettings());
+                    defaultDiscordEventsSettings(),
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
         }
 
         public Settings(
@@ -102,9 +157,10 @@ public final class ConfigManager {
                 boolean serverStatusEnabled,
                 boolean playerListEnabled,
                 DeathSettings deathMessages) {
-            this(botToken, channelId, chatEnabled, eventsEnabled, messages,
-                    serverStatusEnabled, playerListEnabled,
-                    deathMessages, defaultAchievementSettings(), defaultDiscordEventsSettings());
+            this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled,
+                    deathMessages, defaultAchievementSettings(), defaultDiscordEventsSettings(),
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
         }
 
         public Settings(
@@ -117,9 +173,10 @@ public final class ConfigManager {
                 boolean playerListEnabled,
                 DeathSettings deathMessages,
                 AchievementSettings achievements) {
-            this(botToken, channelId, chatEnabled, eventsEnabled, messages,
-                    serverStatusEnabled, playerListEnabled, deathMessages,
-                    achievements, defaultDiscordEventsSettings());
+            this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled, deathMessages,
+                    achievements, defaultDiscordEventsSettings(),
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
         }
 
         public Settings(
@@ -128,9 +185,30 @@ public final class ConfigManager {
                 boolean chatEnabled,
                 boolean eventsEnabled,
                 Map<String, String> messages) {
-            this(botToken, channelId, chatEnabled, eventsEnabled, messages,
-                    true, true, defaultDeathSettings(), defaultAchievementSettings(),
-                    defaultDiscordEventsSettings());
+            this(IntegrationMode.BOT, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, true, true, defaultDeathSettings(), defaultAchievementSettings(),
+                    defaultDiscordEventsSettings(),
+                    defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings());
+        }
+
+        public Settings(
+                IntegrationMode mode,
+                String botToken,
+                String channelId,
+                boolean chatEnabled,
+                boolean eventsEnabled,
+                Map<String, String> messages,
+                boolean serverStatusEnabled,
+                boolean playerListEnabled,
+                DeathSettings deathMessages,
+                AchievementSettings achievements,
+                DiscordEventsSettings discordEvents,
+                WebhookSettings webhook,
+                String serverName) {
+            this(mode, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled,
+                    deathMessages, achievements, discordEvents,
+                    webhook, serverName, defaultEmbedFooterSettings());
         }
     }
 
@@ -232,6 +310,20 @@ public final class ConfigManager {
     public Candidate candidateFrom(
             ConfigurationSection configuration, String environmentToken) {
         List<String> errors = new ArrayList<>();
+        Object modeValue = configuration.get("discord.mode");
+        IntegrationMode mode = IntegrationMode.BOT;
+        if (modeValue != null) {
+            if (modeValue instanceof String stringMode) {
+                mode = IntegrationMode.fromString(stringMode, null);
+                if (mode == null) {
+                    errors.add("discord.mode must be either BOT or WEBHOOK.");
+                    mode = IntegrationMode.BOT;
+                }
+            } else {
+                errors.add("discord.mode must be a string.");
+            }
+        }
+
         String configuredToken = environmentToken == null || environmentToken.isBlank()
                 ? readString(configuration, "discord.bot-token", errors) : "";
         String channelId = readString(configuration, "discord.channel-id", errors);
@@ -251,6 +343,12 @@ public final class ConfigManager {
         DeathSettings deathMessages = readDeathSettings(configuration, errors);
         AchievementSettings achievements = readAchievementSettings(configuration, errors);
         DiscordEventsSettings discordEvents = readDiscordEventsSettings(configuration, errors);
+        WebhookSettings webhook = readWebhookSettings(configuration, errors);
+        EmbedFooterSettings embedFooter = readEmbedFooterSettings(
+                configuration, discordEvents.footer(), errors);
+        String serverName = readStringOrDefault(
+                configuration, "server.name", "Minecraft Server", errors);
+
         Map<String, String> messages = new java.util.HashMap<>();
         Map<String, Object> messageValues = new java.util.HashMap<>();
         for (String key : MESSAGE_KEYS) {
@@ -269,9 +367,10 @@ public final class ConfigManager {
                 deathMessages,
                 achievements,
                 discordEvents);
-        errors.addAll(validateConfiguration(token, channelId, requireChannelId));
+        errors.addAll(validateConfiguration(mode, token, channelId, requireChannelId, webhook));
         if (errors.isEmpty()) {
             return new Candidate(new Settings(
+                    mode,
                     token,
                     channelId,
                     chatEnabled,
@@ -281,7 +380,10 @@ public final class ConfigManager {
                     playerListEnabled,
                     deathMessages,
                     achievements,
-                    discordEvents), List.of());
+                    discordEvents,
+                    webhook,
+                    serverName,
+                    embedFooter), List.of());
         }
         return new Candidate(null, errors);
     }
@@ -732,6 +834,40 @@ public final class ConfigManager {
         }
     }
 
+    private static WebhookSettings readWebhookSettings(
+            ConfigurationSection configuration, List<String> errors) {
+        Object sectionValue = configuration.get("discord.webhook");
+        if (sectionValue != null && !(sectionValue instanceof ConfigurationSection)) {
+            errors.add("discord.webhook must be a configuration section.");
+            return defaultWebhookSettings();
+        }
+        String url = readStringOrDefault(configuration, "discord.webhook.url", "", errors);
+        String username = readStringOrDefault(
+                configuration, "discord.webhook.username", "{player}", errors);
+        String avatarUrl = readStringOrDefault(
+                configuration, "discord.webhook.avatar-url", "", errors);
+        return new WebhookSettings(url, username, avatarUrl);
+    }
+
+    private static EmbedFooterSettings readEmbedFooterSettings(
+            ConfigurationSection configuration, String legacyFooter, List<String> errors) {
+        Object sectionValue = configuration.get("discord.embed");
+        if (sectionValue != null && !(sectionValue instanceof ConfigurationSection)) {
+            errors.add("discord.embed must be a configuration section.");
+        }
+        Object footerValue = configuration.get("discord.embed.footer");
+        if (footerValue != null && !(footerValue instanceof ConfigurationSection)) {
+            errors.add("discord.embed.footer must be a configuration section.");
+        }
+        String text = readStringOrDefault(configuration, "discord.embed.footer.text", "", errors);
+        String iconUrl = readStringOrDefault(configuration, "discord.embed.footer.icon-url", "", errors);
+        if (text == null || text.isBlank()) {
+            text = legacyFooter != null && !legacyFooter.isBlank()
+                    ? legacyFooter : DiscordEmbedFactory.DEFAULT_FOOTER;
+        }
+        return new EmbedFooterSettings(text, iconUrl);
+    }
+
     private static boolean readBoolean(
             ConfigurationSection configuration,
             String path,
@@ -914,26 +1050,72 @@ public final class ConfigManager {
                 && discordEvents.achievementsEnabled();
     }
 
+    public static boolean isValidWebhookUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return false;
+        }
+        var matcher = DISCORD_WEBHOOK_URL_PATTERN.matcher(url.trim());
+        if (!matcher.matches()) {
+            return false;
+        }
+        String snowflake = matcher.group(2);
+        return isValidSnowflake(snowflake);
+    }
+
+    public static String maskWebhookUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        var matcher = DISCORD_WEBHOOK_URL_PATTERN.matcher(url.trim());
+        if (matcher.matches()) {
+            String host = matcher.group(1);
+            String id = matcher.group(2);
+            return "https://" + host + "/api/webhooks/" + id + "/********";
+        }
+        return "********";
+    }
+
+    public static List<String> validateConfiguration(
+            IntegrationMode mode,
+            String token,
+            String channelId,
+            boolean requireChannelId,
+            WebhookSettings webhook) {
+        List<String> errors = new ArrayList<>();
+        if (mode == null || mode == IntegrationMode.BOT) {
+            if (!isValidBotToken(token)) {
+                errors.add(
+                        "Discord bot token is missing or invalid; set MINEBRIDGE_BOT_TOKEN "
+                                + "or discord.bot-token.");
+            }
+            boolean channelProvided = channelId != null && !channelId.isBlank();
+            if (requireChannelId ? !isValidChannelId(channelId)
+                    : (channelProvided && !isValidChannelId(channelId))) {
+                errors.add(
+                        "Discord channel ID is missing or invalid; set discord.channel-id "
+                                + "to the configured text channel's 17-20 digit ID.");
+            }
+        } else if (mode == IntegrationMode.WEBHOOK) {
+            String url = webhook != null ? webhook.url() : "";
+            if (url == null || url.isBlank()) {
+                errors.add("discord.webhook.url is required when discord.mode is WEBHOOK.");
+            } else if (!isValidWebhookUrl(url)) {
+                errors.add(
+                        "discord.webhook.url must be a valid HTTPS Discord webhook URL "
+                                + "(e.g. https://discord.com/api/webhooks/ID/TOKEN).");
+            }
+        }
+        return List.copyOf(errors);
+    }
+
     public static List<String> validateConfiguration(String token, String channelId) {
         return validateConfiguration(token, channelId, true);
     }
 
     public static List<String> validateConfiguration(
             String token, String channelId, boolean requireChannelId) {
-        List<String> errors = new ArrayList<>();
-        if (!isValidBotToken(token)) {
-            errors.add(
-                    "Discord bot token is missing or invalid; set MINEBRIDGE_BOT_TOKEN "
-                            + "or discord.bot-token.");
-        }
-        boolean channelProvided = channelId != null && !channelId.isBlank();
-        if (requireChannelId ? !isValidChannelId(channelId)
-                : (channelProvided && !isValidChannelId(channelId))) {
-            errors.add(
-                    "Discord channel ID is missing or invalid; set discord.channel-id "
-                            + "to the configured text channel's 17-20 digit ID.");
-        }
-        return List.copyOf(errors);
+        return validateConfiguration(
+                IntegrationMode.BOT, token, channelId, requireChannelId, defaultWebhookSettings());
     }
 
     public static List<String> validateConfiguration(Settings settings) {
@@ -941,13 +1123,31 @@ public final class ConfigManager {
             return validateConfiguration("", "", true);
         }
         return validateConfiguration(
+                settings.mode(),
                 settings.botToken(),
                 settings.channelId(),
-                requiresDiscordChannel(settings));
+                requiresDiscordChannel(settings),
+                settings.webhook());
     }
 
     public List<String> validationErrors() {
         return validateConfiguration(settings);
+    }
+
+    public IntegrationMode mode() {
+        return settings.mode();
+    }
+
+    public WebhookSettings webhook() {
+        return settings.webhook();
+    }
+
+    public String serverName() {
+        return settings.serverName();
+    }
+
+    public EmbedFooterSettings embedFooter() {
+        return settings.embedFooter();
     }
 
     public boolean chatEnabled() {

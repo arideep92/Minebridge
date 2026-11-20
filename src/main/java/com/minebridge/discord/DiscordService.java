@@ -79,7 +79,7 @@ public final class DiscordService {
                 });
     }
 
-    DiscordService(
+    public DiscordService(
             MineBridgePlugin plugin,
             ConfigManager config,
             Function<ConfigManager.Settings, JDA> clientFactory,
@@ -323,6 +323,7 @@ public final class DiscordService {
                     && !channelId.isBlank()
                     && current.getTextChannelById(channelId) != null;
             return new MineBridgeStatus(
+                    IntegrationMode.BOT,
                     state,
                     channelAvailable,
                     outgoingQueue.size(),
@@ -330,7 +331,8 @@ public final class DiscordService {
                     uptimeMillis,
                     config.chatEnabled(),
                     config.eventsEnabled(),
-                    outgoingDropped.get());
+                    outgoingDropped.get(),
+                    false);
         }
     }
 

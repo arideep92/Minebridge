@@ -63,4 +63,36 @@ class ChatListenerTest {
 
         assertEquals(List.of(), sent);
     }
+
+    @Test
+    void relaysChatWithServerAndPrefixPlaceholders() {
+        List<String> sent = new ArrayList<>();
+
+        assertTrue(ChatListener.relayIfNonBlank(
+                "[{server}] {prefix}{player}: {message}",
+                "Alex",
+                "hello world",
+                TIMESTAMP,
+                "Survival",
+                "[VIP] ",
+                sent::add));
+
+        assertEquals(List.of("[Survival] \\[VIP\\] Alex: hello world"), sent);
+    }
+
+    @Test
+    void preventsRecursiveExpansionInRelayIfNonBlank() {
+        List<String> sent = new ArrayList<>();
+
+        assertTrue(ChatListener.relayIfNonBlank(
+                "[{server}] **{player}**: {message}",
+                "Alex",
+                "I love {server} with {prefix}",
+                TIMESTAMP,
+                "SMP",
+                "[Mod] ",
+                sent::add));
+
+        assertEquals(List.of("[SMP] **Alex**: I love {server} with {prefix}"), sent);
+    }
 }

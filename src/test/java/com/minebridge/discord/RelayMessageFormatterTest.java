@@ -135,4 +135,71 @@ class RelayMessageFormatterTest {
                 RelayMessageFormatter.sanitizeText(
                         "A\uD800\uD83D\uDE00é\uDC00B"));
     }
+
+    @Test
+    void formatsServerAndPrefixPlaceholdersInDiscordAndMinecraft() {
+        String discord = RelayMessageFormatter.formatForDiscord(
+                "[{server}] {prefix}{player}: {message}",
+                "Alex",
+                "Hello!",
+                "2026-11-20T12:00:00Z",
+                "Survival",
+                "[Admin] ");
+        assertEquals("[Survival] \\[Admin\\] Alex: Hello!", discord);
+
+        String minecraft = RelayMessageFormatter.formatForMinecraft(
+                "[{server}] {prefix}{player}: {message}",
+                "Alex",
+                "AlexDisplay",
+                "alex_user",
+                "Hello!",
+                "2026-11-20T12:00:00Z",
+                "Survival",
+                "[Admin] ");
+        assertEquals("[Survival] [Admin] Alex: Hello!", minecraft);
+    }
+
+    @Test
+    void defaultsServerToMinecraftServerWhenOmittedOrBlank() {
+        String formatted = RelayMessageFormatter.formatForDiscord(
+                "[{server}] **{player}**: {message}",
+                "Alex",
+                "Hello",
+                "2026-11-20T12:00:00Z",
+                "",
+                "");
+        assertEquals("[Minecraft Server] **Alex**: Hello", formatted);
+
+        String nullServer = RelayMessageFormatter.formatForDiscord(
+                "[{server}] **{player}**: {message}",
+                "Alex",
+                "Hello",
+                "2026-11-20T12:00:00Z",
+                null,
+                null);
+        assertEquals("[Minecraft Server] **Alex**: Hello", nullServer);
+    }
+
+    @Test
+    void preventsRecursiveTemplateInjectionWithServerAndPrefix() {
+        // User message containing {server} and {prefix} must not be re-expanded
+        String formatted = RelayMessageFormatter.formatForDiscord(
+                "**{player}**: {message}",
+                "Alex",
+                "Check out {server} and {prefix} and {player}",
+                "2026-11-20T12:00:00Z",
+                "SMP",
+                "[VIP] ");
+        assertEquals("**Alex**: Check out {server} and {prefix} and {player}", formatted);
+
+        // Player name containing placeholders must not inject
+        String maliciousPlayer = RelayMessageFormatter.formatForDiscord(
+                "[{server}] {player}: {message}",
+                "{server}",
+                "test",
+                "2026-11-20T12:00:00Z",
+                "SMP",
+                "");
+        assertEquals("[SMP] {server}: test", maliciousPlayer);
+    }
 }

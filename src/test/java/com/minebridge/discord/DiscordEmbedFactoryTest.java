@@ -113,4 +113,40 @@ class DiscordEmbedFactoryTest {
         assertEquals(1, data.getEmbeds().size());
         assertTrue(data.getAllowedMentions().isEmpty());
     }
+
+    @Test
+    void supportsCustomFooterIconUrlAndGracefullyOmitsWhenBlank() {
+        String iconUrl = "https://example.com/server-icon.png";
+        MessageEmbed joinWithIcon = DiscordEmbedFactory.playerJoined(
+                "Alex", "Alex joined the server.", false,
+                "MineBridge", iconUrl);
+        assertNotNull(joinWithIcon.getFooter());
+        assertEquals("MineBridge", joinWithIcon.getFooter().getText());
+        assertEquals(iconUrl, joinWithIcon.getFooter().getIconUrl());
+
+        MessageEmbed leaveWithIcon = DiscordEmbedFactory.playerLeft(
+                "Alex", "Alex left the server.", "MineBridge", iconUrl);
+        assertNotNull(leaveWithIcon.getFooter());
+        assertEquals(iconUrl, leaveWithIcon.getFooter().getIconUrl());
+
+        AdvancementContext adv = new AdvancementContext(
+                "Alex", "Getting Wood", "", AdvancementCategory.STORY, false);
+        MessageEmbed advWithIcon = DiscordEmbedFactory.advancement(
+                adv, "ADVANCEMENT", "desc", 0x123456, "MineBridge", iconUrl);
+        assertNotNull(advWithIcon.getFooter());
+        assertEquals(iconUrl, advWithIcon.getFooter().getIconUrl());
+
+        DeathContext death = new DeathContext("Alex", "Zombie", "attack", DeathCategory.MOB_KILL);
+        MessageEmbed deathWithIcon = DiscordEmbedFactory.death(
+                "DEATH", "desc", death, 0x123456, "MineBridge", iconUrl);
+        assertNotNull(deathWithIcon.getFooter());
+        assertEquals(iconUrl, deathWithIcon.getFooter().getIconUrl());
+
+        // Blank or null icon gracefully omitted
+        MessageEmbed joinWithoutIcon = DiscordEmbedFactory.playerJoined(
+                "Alex", "desc", false, "MineBridge", "   ");
+        assertNotNull(joinWithoutIcon.getFooter());
+        assertEquals("MineBridge", joinWithoutIcon.getFooter().getText());
+        assertTrue(joinWithoutIcon.getFooter().getIconUrl() == null || joinWithoutIcon.getFooter().getIconUrl().isBlank());
+    }
 }

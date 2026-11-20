@@ -23,7 +23,11 @@ public final class MineBridgeCommand implements CommandExecutor, TabCompleter {
     public MineBridgeCommand(MineBridgePlugin plugin, DiscordService discord) {
         this.plugin = plugin;
         this.discord = discord;
-        this.config = plugin.getConfigManager();
+        this.config = plugin != null ? plugin.getConfigManager() : null;
+    }
+
+    public MineBridgeCommand(MineBridgePlugin plugin) {
+        this(plugin, plugin != null ? plugin.getDiscordService() : null);
     }
 
     @Override
@@ -77,8 +81,14 @@ public final class MineBridgeCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§cUsage: /minebridge status");
                 return true;
             }
-            discord.getStatus(plugin.getUptimeMillis()).formatLines()
-                    .forEach(sender::sendMessage);
+            MineBridgeStatus status = plugin != null
+                    ? plugin.getStatus()
+                    : (discord != null ? discord.getStatus(0) : null);
+            if (status != null) {
+                status.formatLines().forEach(sender::sendMessage);
+            } else {
+                sender.sendMessage("§cMineBridge status is currently unavailable.");
+            }
             return true;
         }
 
@@ -120,7 +130,7 @@ public final class MineBridgeCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage("§cUsage: /minebridge reload");
                 return true;
             }
-            sender.sendMessage("§eMineBridge reload requested; waiting for Discord connection...");
+            sender.sendMessage("§eMineBridge reload requested; applying configuration...");
             plugin.reloadMineBridge((ReloadResult result) -> sender.sendMessage(
                     (result.successful() ? "§a" : "§c") + result.message()));
             return true;
