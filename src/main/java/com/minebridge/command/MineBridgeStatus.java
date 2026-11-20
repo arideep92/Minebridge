@@ -1,9 +1,12 @@
 package com.minebridge.command;
 
+import com.minebridge.discord.IntegrationMode;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public record MineBridgeStatus(
+        IntegrationMode mode,
         String discordState,
         boolean channelAvailable,
         int outgoingQueueSize,
@@ -11,7 +14,8 @@ public record MineBridgeStatus(
         long uptimeMillis,
         boolean chatRelayEnabled,
         boolean joinLeaveNotificationsEnabled,
-        long outgoingDropped) {
+        long outgoingDropped,
+        boolean luckPermsAvailable) {
 
     public MineBridgeStatus(
             String discordState,
@@ -22,6 +26,7 @@ public record MineBridgeStatus(
             boolean chatRelayEnabled,
             boolean joinLeaveNotificationsEnabled) {
         this(
+                IntegrationMode.BOT,
                 discordState,
                 channelAvailable,
                 outgoingQueueSize,
@@ -29,18 +34,49 @@ public record MineBridgeStatus(
                 uptimeMillis,
                 chatRelayEnabled,
                 joinLeaveNotificationsEnabled,
-                0L);
+                0L,
+                false);
+    }
+
+    public MineBridgeStatus(
+            String discordState,
+            boolean channelAvailable,
+            int outgoingQueueSize,
+            int outgoingQueueCapacity,
+            long uptimeMillis,
+            boolean chatRelayEnabled,
+            boolean joinLeaveNotificationsEnabled,
+            long outgoingDropped) {
+        this(
+                IntegrationMode.BOT,
+                discordState,
+                channelAvailable,
+                outgoingQueueSize,
+                outgoingQueueCapacity,
+                uptimeMillis,
+                chatRelayEnabled,
+                joinLeaveNotificationsEnabled,
+                outgoingDropped,
+                false);
     }
 
     public List<String> formatLines() {
         List<String> lines = new ArrayList<>();
         lines.add("§bMineBridge §7Status:");
-        lines.add("§7Discord: " + colorForConnection(discordState) + discordState);
-        lines.add("§7Configured channel: "
-                + (channelAvailable ? "§aAvailable" : "§cUnavailable"));
+        lines.add("§7Mode: §f" + (mode != null ? mode.name() : "BOT"));
+        if (mode == IntegrationMode.WEBHOOK) {
+            lines.add("§7Webhook status: " + colorForWebhook(discordState) + discordState);
+            lines.add("§7Webhook destination: "
+                    + (channelAvailable ? "§aValid" : "§cInvalid / Unconfigured"));
+        } else {
+            lines.add("§7Discord: " + colorForConnection(discordState) + discordState);
+            lines.add("§7Configured channel: "
+                    + (channelAvailable ? "§aAvailable" : "§cUnavailable"));
+        }
         lines.add("§7Outgoing queue: §f" + outgoingQueueSize
                 + "/" + outgoingQueueCapacity);
         lines.add("§7Outgoing dropped: §f" + outgoingDropped);
+        lines.add("§7LuckPerms: " + (luckPermsAvailable ? "§aAvailable" : "§cUnavailable"));
         lines.add("§7Plugin uptime: §f" + formatUptime(uptimeMillis));
         lines.add("§7Chat relay: "
                 + (chatRelayEnabled ? "§aEnabled" : "§cDisabled"));
@@ -51,6 +87,10 @@ public record MineBridgeStatus(
 
     private static String colorForConnection(String state) {
         return "CONNECTED".equals(state) ? "§a" : "§c";
+    }
+
+    private static String colorForWebhook(String state) {
+        return "READY".equals(state) ? "§a" : "§c";
     }
 
     private static String formatUptime(long uptimeMillis) {

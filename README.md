@@ -1,447 +1,187 @@
 # MineBridge
 
-MineBridge relays Minecraft chat and player join/leave notifications to a
-configured Discord text channel, and relays human messages from that channel
-back to Minecraft.
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Aridro%2FMineBridge-blue?logo=github)](https://github.com/Aridro/MineBridge)
+[![Modrinth Download](https://img.shields.io/badge/Modrinth-MineBridge-00AF5C?logo=modrinth)](https://modrinth.com/plugin/minebridge)
 
-It also provides Minecraft commands for Discord connection status and server
-information. Discord messages are accepted only from the configured guild
-channel; bot and webhook messages are ignored.
+MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for Spigot and Paper servers. It connects your Minecraft server and Discord community with two distinct integration modes: **Bot Mode** and **Webhook Mode**.
 
-Current features:
+- **Repository**: [https://github.com/Aridro/MineBridge](https://github.com/Aridro/MineBridge)
+- **Modrinth Downloads**: [https://modrinth.com/plugin/minebridge](https://modrinth.com/plugin/minebridge)
 
-- Bidirectional chat relay and player join/leave notifications.
-- Configurable Minecraft death announcements and Discord death notification
-  embeds, including player, mob, and environmental causes.
-- Minecraft advancement announcements and Discord achievement embeds, with
-  category and challenge-aware templates.
-- In-game Discord status, server capacity, and online-player commands.
-- Configurable message templates, with validated placeholders and safe handling
-  of user-provided text.
+---
 
-## Requirements and compatibility
+## Features
 
-- Java 21 or newer is required to run the plugin.
-- The project compiles against Spigot API `1.20.6-R0.1-SNAPSHOT` and declares
-  `api-version: '1.20'`; Spigot 1.20.6 is the configured build target.
-- No live-server compatibility matrix is maintained. Paper compatibility and
-  other server versions are not certified; test the exact server build you
-  intend to run.
+- **Dual Integration Modes**:
+  - **BOT Mode (Default)**: Bidirectional chat synchronization (Minecraft ↔ Discord) and outbound event embeds using JDA 5.
+  - **WEBHOOK Mode**: Lightweight one-way outbound delivery (Minecraft → Discord) via asynchronous HTTP webhooks without requiring a bot account, bot token, or gateway connection.
+- **Event Announcements & Rich Embeds**:
+  - Player join, leave, and first-join welcome embeds.
+  - Categorized death announcements (player kills, mob kills, environmental damage, void, explosions) with customizable Discord embeds.
+  - Advancement and challenge completion announcements with tier-aware embeds.
+- **Customizable Appearance**:
+  - Dynamic webhook username and avatar URLs (e.g. displaying player heads).
+  - Customizable embed footer text and icon URLs.
+  - Server name placeholder `{server}` across templates and footers.
+- **Optional LuckPerms Integration**:
+  - Soft-dependency integration: automatically resolves player group prefixes (`{prefix}`) in chat templates using cached metadata without blocking the server thread.
+  - Works seamlessly with zero configuration if LuckPerms is absent.
+- **Reliability & Rate Limiting**:
+  - Bounded FIFO queues for outgoing messages.
+  - Automatic Discord HTTP 429 rate-limit backoff and retry handling (`Retry-After` / `retry_after`).
+  - Secret masking in logs and status commands (bot tokens and webhook URLs are never logged).
+  - Zero-event-leak in-place configuration reload (`/minebridge reload`).
 
-## Build and install
+> [!IMPORTANT]
+> **WEBHOOK Mode is strictly outbound (Minecraft → Discord).** Discord chat messages cannot be received or relayed into Minecraft in WEBHOOK mode. If you require two-way chat synchronization, use **BOT Mode**.
 
-Build the shaded plugin JAR from the repository root:
+---
 
-```sh
-./gradlew build
-```
+## Requirements and Compatibility
 
-The distributable is `build/libs/MineBridge-1.2.1.jar` for the current project
-version. Place it in the `plugins/` directory of the server you have chosen to
-test, then start the server once to create `plugins/MineBridge/config.yml`.
-Stop the server before replacing the JAR during an upgrade.
+- **Java**: Java 21 or newer.
+- **Server Platform**: Spigot API `1.20.6-R0.1-SNAPSHOT` (`api-version: '1.20'`). Verified on Paper 1.20.6.
+- **Permissions Plugin (Optional)**: LuckPerms 5.x for `{prefix}` placeholder support.
 
-## Testing and releases
+---
 
-Run the test suite with `./gradlew test`. Run the full build, including tests
-and the shaded plugin JAR, with `./gradlew build`; use `./gradlew clean build`
-for a clean build.
-The GitHub Actions workflow runs the build on Java 21 for pushes and pull
-requests and retains the generated plugin JAR as a CI artifact. It does not
-deploy the plugin. Dependency vulnerability scanning runs only when the
-`NVD_API_KEY` secret is available; otherwise the workflow skips it and reports
-that dependency vulnerability status is unverified.
-Dependabot checks Gradle and GitHub Actions dependencies weekly; review its
-pull requests with the normal CI results before merging.
+## Build and Installation
 
-Before a release, update `version` in `build.gradle` and `plugin.yml`, add a
-dated entry to [CHANGELOG.md](CHANGELOG.md), then build and test from a clean
-checkout. Review the [1.2.0 release notes](RELEASE_NOTES_1.2.0.md) and test
-the resulting JAR against the intended Minecraft server and a Discord test
-server. For rollback, stop the server, restore the previous JAR and the
-backed-up `config.yml`, then start the server and check `/minebridge status`.
+### Download or Build
 
-## Dependency vulnerability scanning
+1. Download the latest release from [Modrinth](https://modrinth.com/plugin/minebridge) or [GitHub Releases](https://github.com/Aridro/MineBridge/releases).
+2. Alternatively, compile from source:
+   ```sh
+   ./gradlew shadowJar
+   ```
+   The shaded JAR will be created at `build/libs/MineBridge-1.3.0.jar`.
 
-Run `./gradlew --no-daemon dependencyCheckAnalyze` to scan resolved production
-runtime dependencies, including JDA and its transitive dependencies. The
-Spigot API remains `compileOnly` and is not included in the runtime scan or
-shaded plugin. OWASP Dependency-Check writes HTML and JSON reports to
-`build/reports/dependency-check/`, including CVE identifiers, affected
-dependency versions, CVSS severity, and vulnerability descriptions/references
-that provide remediation context where available. Review the referenced
-advisory for the fixed version before changing dependencies; updates are not
-automatic. The task fails the build when a finding has CVSS 7.0 or higher.
+### Installation
 
-The GitHub Actions verification workflow runs this scan only when the
-nonempty `NVD_API_KEY` Actions secret is available, and retains generated
-reports as an artifact even if that scan fails. When the secret is unavailable
-(including forked pull requests), CI explicitly skips the scan and warns that
-dependency vulnerability status remains unverified; the workflow's build/test
-job still runs. Locally, export the same variable before running the scan.
-Never commit or print the key. The first scan downloads vulnerability data and
-may take several minutes; network outages or NVD rate limits can prevent
-completion. A skipped or failed scan is not a passed vulnerability assessment.
+1. Place `MineBridge-1.3.0.jar` into your server's `plugins/` directory.
+2. Start the server once to generate `plugins/MineBridge/config.yml`.
+3. Configure either **BOT Mode** or **WEBHOOK Mode** as detailed below.
+4. Run `/minebridge reload` or restart the server.
 
-The scan also updates CISA's Known Exploited Vulnerabilities (KEV) catalog by
-default. If a restricted network blocks that auxiliary feed, the scan can be
-run with `-PdependencyCheckKevEnabled=false`; this keeps NVD CVE analysis
-enabled but omits CISA known-exploited enrichment, reducing prioritization
-coverage. Re-enable the default or configure an approved KEV mirror when
-available. Do not treat a scan with KEV disabled as having full CISA KEV
-coverage.
+---
 
-## Discord setup and configuration
+## Integration Setup Guides
 
-1. Create a Discord bot and invite it to the server containing the target
-   channel.
-2. Grant the bot **View Channel** and **Send Messages** in that channel. No
-   additional Discord permissions are required by the documented relay
-   features.
-3. Enable the **Message Content Intent** for the bot in the Discord Developer
-   Portal. MineBridge enables the `GUILD_MESSAGES` and privileged
-   `MESSAGE_CONTENT` gateway intents; it does not require member presences or a
-   populated member cache.
-4. Configure the channel ID and bot token as described below, then start or
-   reload MineBridge.
+### 1. BOT Mode Setup (Two-Way Chat & Events)
 
-Set `discord.channel-id` in `plugins/MineBridge/config.yml` to the 17-20 digit
-ID of the target Discord text channel. Enable Developer Mode in Discord to copy
-the channel ID.
+BOT mode connects via Discord's Gateway API using JDA.
 
-Prefer setting the bot token in the server process environment as
-`MINEBRIDGE_BOT_TOKEN`. A non-blank environment value takes precedence over
-`discord.bot-token`; the config token remains supported for existing
-installations. Do not put a real token in source control, paste it into chat,
-or include it in logs. The shipped config intentionally has an empty token.
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and create a new application and bot.
+2. Under the **Bot** tab:
+   - Enable **Message Content Intent** under Privileged Gateway Intents.
+   - Reset and copy the **Bot Token**.
+3. Invite the bot to your Discord server with **View Channel** and **Send Messages** permissions.
+4. Copy the **Channel ID** of your target Discord text channel (enable Developer Mode in Discord settings, right-click the channel, and select *Copy Channel ID*).
+5. In `plugins/MineBridge/config.yml`:
+   ```yaml
+   discord:
+     mode: BOT
+     bot-token: "YOUR_BOT_TOKEN" # Or set the MINEBRIDGE_BOT_TOKEN environment variable
+     channel-id: "123456789012345678"
+   ```
+6. Reload the plugin: `/minebridge reload`.
 
-The config contains the Discord token and channel ID, six chat and player-event
-templates, and feature toggles for relays and server-information commands.
-These templates must be non-empty, no longer than 2000 characters, and use
-only balanced, supported placeholders:
+### 2. WEBHOOK Mode Setup (One-Way Outbound Relay)
+
+WEBHOOK mode uses Discord Webhooks. No bot account, token, or gateway intent is required.
+
+1. In your Discord server, open **Channel Settings** for the desired text channel.
+2. Navigate to **Integrations** → **Webhooks** → **New Webhook**.
+3. Name the webhook (e.g. `Server Relay`) and click **Copy Webhook URL**.
+4. In `plugins/MineBridge/config.yml`:
+   ```yaml
+   discord:
+     mode: WEBHOOK
+     webhook:
+       url: "https://discord.com/api/webhooks/123456789012345678/abcdefg_hijk..."
+       username: "{player}"
+       avatar-url: "https://mc-heads.net/avatar/{player}/100"
+   ```
+5. Reload the plugin: `/minebridge reload`.
+
+---
+
+## LuckPerms Integration
+
+MineBridge includes a built-in soft dependency on [LuckPerms](https://luckperms.net/).
+
+- If LuckPerms is installed and enabled, you can include `{prefix}` in chat templates:
+  ```yaml
+  messages:
+    minecraft-to-discord: "{prefix}**{player}**: {message}"
+    discord-to-minecraft: "&9[Discord] &f{prefix}{player}: {message}"
+  ```
+- Cached metadata is read directly from memory; prefix retrieval never blocks the main Minecraft server thread.
+- If LuckPerms is not installed or the player has no prefix, `{prefix}` resolves safely to an empty string.
+
+---
+
+## Configuration Reference
+
+### Main Settings
 
 | Setting | Default | Description |
-| --- | --- | --- |
-| `discord.bot-token` | `""` | Bot token; use `MINEBRIDGE_BOT_TOKEN` instead when possible. |
-| `discord.channel-id` | `""` | 17-20 digit unsigned 64-bit Discord text channel ID (required when any Discord-dependent feature is enabled; optional when all Discord features are disabled). |
-| `features.chat-relay` | `true` | Enable Minecraft and Discord chat relay. |
-| `features.join-leave-notifications` | `true` | Enable player join/leave notifications. |
-| `features.server-status` | `true` | Enable `/minebridge server`. |
-| `features.player-list` | `true` | Enable `/minebridge players`. |
+| :--- | :--- | :--- |
+| `discord.mode` | `BOT` | Integration mode: `BOT` or `WEBHOOK` (case-insensitive). |
+| `discord.bot-token` | `""` | Bot token for BOT mode. (Prefer setting `MINEBRIDGE_BOT_TOKEN` in the environment). |
+| `discord.channel-id` | `""` | 17–20 digit Discord Snowflake channel ID (required for BOT mode). |
+| `discord.webhook.url` | `""` | Discord webhook URL (required for WEBHOOK mode; must be HTTPS discord.com/discordapp.com). |
+| `discord.webhook.username` | `"{player}"` | Webhook message author name. Supports `{player}` and `{server}`. |
+| `discord.webhook.avatar-url` | `""` | Webhook avatar image URL. Supports `{player}`. |
+| `discord.embed.footer.text` | `""` | Embed footer text. Supports `{server}`. |
+| `discord.embed.footer.icon-url` | `""` | Embed footer icon URL (HTTP/HTTPS). |
+| `server.name` | `"Minecraft Server"` | Server name used by `{server}` placeholder. |
 
-| Template | Default | Supported placeholders |
-| --- | --- | --- |
-| `messages.minecraft-to-discord` | `**{player}**: {message}` | `{player}`, `{message}`, `{timestamp}` |
-| `messages.discord-to-minecraft` | `&9[Discord] &f{player}: {message}` | `{player}`, `{display_name}`, `{username}`, `{message}`, `{timestamp}` |
-| `messages.player-join` | `🟢 **{player}** joined the server.` | `{player}`, `{timestamp}` |
-| `messages.player-leave` | `🔴 **{player}** left the server.` | `{player}`, `{timestamp}` |
+### Message Templates and Placeholders
+
+| Template | Default | Supported Placeholders |
+| :--- | :--- | :--- |
+| `messages.minecraft-to-discord` | `**{player}**: {message}` | `{player}`, `{message}`, `{timestamp}`, `{server}`, `{prefix}` |
+| `messages.discord-to-minecraft` | `&9[Discord] &f{player}: {message}` | `{player}`, `{display_name}`, `{username}`, `{message}`, `{timestamp}`, `{server}`, `{prefix}` |
+| `messages.player-join` | `🟢 **{player}** joined the server.` | `{player}`, `{timestamp}`, `{server}` |
+| `messages.player-leave` | `🔴 **{player}** left the server.` | `{player}`, `{timestamp}`, `{server}` |
 | `messages.server-status` | `&7Server &8\| &a{online}&7/&f{max} players online` | `{online}`, `{max}` |
 | `messages.player-list` | `&7Online players (&f{online}&7/&f{max}&7): {players}` | `{online}`, `{max}`, `{players}` |
 
-### Death Messages
+---
 
-Death Messages v1 is enabled by default. It classifies player and mob kills,
-falls, lava, fire, drowning, void, explosions, environmental damage, and other
-causes. Minecraft broadcasts use color-aware templates. Discord notifications
-are sent asynchronously as embeds by default; they use the configured
-`death-messages.discord.channel-id`, or `discord.channel-id` when left blank.
-The bot needs **View Channel** and **Send Messages** in the notification
-channel. Discord API requests do not block the Minecraft server thread.
+## Commands and Permissions
 
-Relevant configuration:
+| Command | Permission | Description |
+| :--- | :--- | :--- |
+| `/minebridge help` | None | Displays available commands. |
+| `/minebridge status` | None | Shows active mode, connection/webhook health, queue metrics, and uptime. |
+| `/minebridge server` | None | Displays online player count and server capacity. |
+| `/minebridge players` | None | Lists names of currently online players. |
+| `/minebridge reload` | `minebridge.admin` (op) | Validates and reloads configuration, smoothly transitioning services. |
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `death-messages.enabled` | `true` | Master toggle for the death module. |
-| `death-messages.minecraft.enabled` | `true` | Enable Minecraft death announcements. |
-| `death-messages.minecraft.broadcast` | `true` | Broadcast enabled category templates in Minecraft. |
-| `death-messages.discord.enabled` | `true` | Enable Discord death notifications. |
-| `death-messages.discord.channel-id` | `""` | Optional 17-20 digit channel ID; blank uses `discord.channel-id`. |
-| `death-messages.discord.embed` | `true` | Legacy setting retained for compatibility; death notifications are always embeds. |
-| `death-messages.discord.title` | `☠ Player death` | Embed title; supports `{victim}`, `{killer}`, `{cause}`, `{category}`, and `{message}`. |
-| `death-messages.discord.description` | `{message}\nCategory: {category}\nCause: {cause}` | Embed description; supports the same placeholders. |
-| `death-messages.discord.color` | `#D32F2F` | Six-digit hexadecimal embed color. |
-| `death-messages.categories.<category>` | `true` | Enable or disable `player-kill`, `mob-kill`, `fall`, `lava`, `fire`, `drowning`, `void`, `explosion`, `environmental`, or `other`. |
-| `death-messages.messages.<category>` | See `config.yml` | Category-specific template; supports `{victim}`, `{killer}`, `{cause}`, and `{category}`. |
+Command aliases: `/mb`
 
-The template's `{killer}` value is empty for environmental deaths. Discord
-player, mob, and cause values have user-controlled Markdown escaped, and
-notifications disable all parsed mentions. Minecraft's vanilla death message
-is suppressed only when MineBridge emits a configured custom broadcast; if the
-module, Minecraft announcements, or a category is disabled, vanilla handling
-is left intact.
+---
 
-Example:
+## Troubleshooting
 
-```yaml
-death-messages:
-  enabled: true
-  minecraft:
-    enabled: true
-    broadcast: true
-  discord:
-    enabled: true
-    channel-id: "123456789012345678"
-    embed: true
-    title: "☠ {victim} died"
-    description: "{message} ({category}: {cause})"
-    color: "#D32F2F"
-  categories:
-    player-kill: true
-    mob-kill: true
-    fall: true
-    lava: true
-    fire: true
-    drowning: true
-    void: true
-    explosion: true
-    environmental: true
-    other: true
-```
+### Bot Mode
+- **Status shows `NOT_STARTED` or `SHUTDOWN`**: Verify `discord.bot-token` or `MINEBRIDGE_BOT_TOKEN`. Ensure internet connectivity.
+- **Bot does not relay Discord messages**: Verify that **Message Content Intent** is toggled on in the Discord Developer Portal under your application's Bot settings.
+- **Configured channel unavailable**: Verify that `discord.channel-id` is correct and that the bot has been invited to the server and granted **View Channel** and **Send Messages** permissions.
 
-An example Minecraft announcement is `☠ Aridro was slain by Zombie`. A
-corresponding Discord embed uses the configured title, description, color,
-victim, killer, category, and cause.
+### Webhook Mode
+- **Status shows `INVALID_WEBHOOK`**: Confirm that `discord.webhook.url` is a valid HTTPS Discord webhook URL starting with `https://discord.com/api/webhooks/` or `https://discordapp.com/api/webhooks/`.
+- **Messages dropped during high traffic**: MineBridge buffers messages in a bounded queue and respects Discord's HTTP 429 rate limits automatically. If your server produces massive bursts of chat, temporary queue drops may occur to prevent memory leaks.
+- **Discord chat not appearing in Minecraft**: This is intended behavior. Discord Webhooks are one-way outbound only. Switch to `BOT` mode if bidirectional relay is needed.
 
-New defaults are merged into existing configurations when reloaded. Use
-`/minebridge reload` after editing these settings; reload does not register
-additional death listeners.
+### Diagnostics & Privacy
+- All diagnostic warnings are rate-limited to avoid log flooding.
+- MineBridge **never** prints Discord bot tokens or webhook URLs in server logs, chat messages, or status outputs.
 
-### Achievement Announcements
+---
 
-MineBridge announces completed advancements using Bukkit's
-`PlayerAdvancementDoneEvent`. The advancement's display supplies its title and
-description; the key identifies Story, Nether, End, Adventure, Husbandry, or
-Other. Display type distinguishes challenges from tasks and goals. Advancements
-without a display are ignored because they have no announcement title or
-description. Repeated player/advancement events are deduplicated for 10 seconds
-using a bounded in-memory cache.
+## License
 
-Minecraft messages use separate normal and challenge templates, while Discord
-embeds include the player, advancement title, description, category, and type.
-Discord requests are submitted asynchronously through the existing JDA client;
-the chosen channel is `achievements.discord.channel-id`, or
-`discord.channel-id` when blank. Dynamic text is Markdown-escaped and Discord
-mentions are disabled.
-
-The Spigot `PlayerAdvancementDoneEvent` is not cancellable, so Bukkit does not
-provide a per-advancement way to suppress Minecraft's built-in announcement.
-If the `announceAdvancements` gamerule is enabled, the server may show its
-vanilla line alongside MineBridge's configured message. Set
-`/gamerule announceAdvancements false` in each world where only MineBridge
-announcements should appear. MineBridge does not change this server-wide gamerule.
-
-| Setting | Default | Description |
-| --- | --- | --- |
-| `achievements.enabled` | `true` | Master achievement announcement toggle. |
-| `achievements.minecraft.enabled` | `true` | Send Minecraft chat announcements. |
-| `achievements.discord.enabled` | `true` | Send Discord embeds. |
-| `achievements.challenges.enabled` | `true` | Include completed challenge advancements. |
-| `achievements.categories.<category>` | `true` | Toggle `story`, `nether`, `end`, `adventure`, `husbandry`, or `other`. |
-| `achievements.messages.normal` | `&a✦ {player} has made the advancement [{title}]!` | Minecraft template for non-challenges. |
-| `achievements.messages.challenge` | `&6🏆 {player} has completed the challenge [{title}]!` | Minecraft template for challenges. |
-| `achievements.discord.channel-id` | `""` | Optional Discord text channel ID; blank uses the main configured channel. |
-| `achievements.discord.title` | `ADVANCEMENT UNLOCKED` | Regular Discord embed title template. |
-| `achievements.discord.description` | `{player} has unlocked {title}.\n{description}` | Regular Discord embed description template. |
-| `achievements.discord.challenge-title` | `CHALLENGE COMPLETED` | Challenge embed title template. |
-| `achievements.discord.challenge-description` | `{player} has completed {title}!\n{description}` | Challenge embed description template. |
-| `achievements.discord.color` | `#2196F3` | Six-digit hexadecimal regular advancement color. Challenges use a gold color. |
-
-Templates support `{player}`, `{title}`, `{description}`, `{category}`, and
-`{challenge}`. The challenge placeholder is `Challenge` or `Advancement`.
-Example configuration:
-
-```yaml
-achievements:
-  enabled: true
-  minecraft:
-    enabled: true
-  discord:
-    enabled: true
-    channel-id: ""
-    title: "ADVANCEMENT UNLOCKED"
-    description: "{player} has unlocked {title}.\n{description}"
-    challenge-title: "CHALLENGE COMPLETED"
-    challenge-description: "{player} has completed {title}!\n{description}"
-    color: "#2196F3"
-  challenges:
-    enabled: true
-  categories:
-    story: true
-    nether: true
-    end: true
-    adventure: true
-    husbandry: true
-    other: true
-  messages:
-    normal: "&a✦ {player} has made the advancement [{title}]!"
-    challenge: "&6🏆 {player} has completed the challenge [{title}]!"
-```
-
-For example, the Minecraft chat message can be `✦ Aridro has made the
-advancement [Stone Age]!`; a challenge can appear as `🏆 Aridro has completed
-the challenge [Cover Me in Debris]!`.
-
-### Unified Discord event embeds
-
-Player joins, first joins, leaves, advancement unlocks, challenges, and player
-deaths are delivered to Discord as embeds only. Each embed includes an event
-title, formatted description, timestamp, configured footer
-(`MineBridge | Minecraft Events` by default), and event-specific fields.
-Embeds disable allowed mentions, escape dynamic Markdown, and use the existing
-JDA client asynchronously. Chat relay messages remain regular messages and are
-not part of this event-only embed policy.
-
-The `discord-events.enabled` and `discord-events.embeds.enabled` toggles gate
-Discord event embeds independently from the Minecraft announcement settings.
-Per-event channel IDs may be left blank to use `discord.channel-id`.
-
-| Setting | Default | Description |
-| --- | --- | --- |
-| `discord-events.enabled` | `true` | Global Discord event-notification toggle. |
-| `discord-events.embeds.enabled` | `true` | Enable or disable event embeds (event notifications are never sent as plain text). |
-| `discord-events.embeds.footer` | `MineBridge \| Minecraft Events` | Footer used on all event embeds. |
-| `discord-events.player-events.enabled` | `true` | Enable join/leave embeds. |
-| `discord-events.player-events.channel-id` | `""` | Join/leave channel; blank uses the main channel. |
-| `discord-events.player-events.join` | `true` | Enable regular join embeds. |
-| `discord-events.player-events.leave` | `true` | Enable leave embeds. |
-| `discord-events.player-events.first-join` | `true` | Enable first-time welcome embeds. |
-| `discord-events.achievements.enabled` | `true` | Enable advancement embeds. |
-| `discord-events.achievements.channel-id` | `""` | Advancement channel; blank uses the legacy achievements channel or main channel. |
-| `discord-events.achievements.<category>` | `true` | Category toggles: `story`, `nether`, `end`, `adventure`, `husbandry`. |
-| `discord-events.achievements.challenges` | `true` | Enable challenge embeds. |
-| `discord-events.deaths.enabled` | `true` | Enable death embeds. |
-| `discord-events.deaths.channel-id` | `""` | Death channel; blank uses the legacy death channel or main channel. |
-| `discord-events.deaths.player-kill` | `true` | Enable PvP death embeds. |
-| `discord-events.deaths.mob-kill` | `true` | Enable mob death embeds. |
-| `discord-events.deaths.environmental` | `true` | Enable environmental death embeds. |
-
-Join, leave, first-join, advancement, and death toggles in this Discord section
-do not change their separate Minecraft announcement settings. The existing
-`features.join-leave-notifications` and each module's prior Discord settings
-are also respected for backward compatibility. Death notices always use an
-embed, even if an old config contains `death-messages.discord.embed: false`.
-
-`{timestamp}` is UTC ISO-8601 and is inserted only when present in a template.
-For Discord messages, `{player}` remains the effective author name used by
-previous versions; `{display_name}` uses the guild member display name when
-available and otherwise falls back to the effective author name. `{username}`
-is the Discord account username. These are display values only and do not link
-Discord and Minecraft accounts. Placeholder values are inserted once and are
-never parsed as template syntax.
-
-Incorrect types for recognized settings, missing credentials, invalid channel
-IDs, empty templates, malformed or unsupported placeholders, and templates
-longer than 2000 characters are rejected. A rejected reload does not replace
-the active config or Discord client. Edit config while the server is running
-and use `/minebridge reload`; success is reported only after the replacement
-Discord gateway reaches Ready. Reload requests use latest-request-wins
-semantics: a newer attempt supersedes an older pending candidate even if the
-newer configuration is invalid or its Discord connection fails. A failed
-attempt leaves the currently active connection and settings in place; an older
-candidate will not be applied afterward.
-
-Inbound queue capacity, per-tick batch size, and rate limits currently use
-built-in defaults rather than configuration options: the queue holds 100
-messages, at most 10 are processed per tick, each Discord user has a burst of
-3 messages replenished over 5 seconds, and all users share a burst of 10
-messages replenished over 1 second.
-
-## Administration and troubleshooting
-
-- The root command is `/minebridge` (alias `/mb`); running it without a
-  subcommand is the same as `/minebridge help`.
-
-| Command | Permission and behavior |
-| --- | --- |
-| `/minebridge help` | Lists available commands; no additional permission required. |
-| `/minebridge status` | Shows Discord connection and outgoing-queue status; no additional permission required. |
-| `/minebridge server` | No additional permission; shows online count and capacity when `features.server-status` is `true` (default). |
-| `/minebridge players` | No additional permission; shows online count and names when `features.player-list` is `true` (default). |
-| `/minebridge reload` | Reloads configuration and replaces the Discord connection after readiness; requires `minebridge.admin` (default: operators). |
-
-- `features.server-status: true` and `features.player-list: true` independently
-  enable these commands by default. Disabled commands are omitted from
-  MineBridge help and tab completion and report that they are disabled if
-  invoked directly.
-- The existing `features.chat-relay: true` and
-  `features.join-leave-notifications: true` defaults remain unchanged.
-- The server-information message templates are color-code-aware and support
-  the placeholders listed above. The player list joins names in the order
-  returned by the server API, separated by commas; names are display text only.
-- `/minebridge status` reports connection state, cached channel availability,
-  outgoing queue size/capacity, outgoing dropped-message count, plugin uptime,
-  and the chat-relay and join/leave-notification toggles. It does not make a
-  REST request to check channel availability.
-- Help and tab completion hide `/minebridge reload` from users without
-  `minebridge.admin`.
-- A `config.yml` validation warning identifies the setting to correct without
-  echoing the bot token. For YAML parse/read failures, check that the file is
-  valid YAML and readable by the server process.
-- If login fails or does not reach Ready, verify the token, network access, and
-  that Message Content Intent is enabled in the Developer Portal.
-- If status reports the channel unavailable, verify the configured channel ID
-  and that the bot can view the channel. JDA's channel cache is used; status
-  does not prove that a send will be accepted.
-- Connection, channel-unavailability, and outgoing-drop diagnostics are
-  rate-limited per category. They never include token values.
-
-For upgrades, back up `plugins/MineBridge/config.yml` and keep a copy of the
-previous JAR before replacement. The plugin preserves the current config file;
-review new release notes before manually merging any newly documented settings.
-
-## Reliability behavior
-
-Discord startup and reload run asynchronously, and gateway resume/reconnect is
-handled by JDA's existing client rather than constructing duplicate clients.
-`/minebridge status` reports the connection state without revealing
-configuration values, configured-channel cache availability, outgoing queue
-size/capacity, plugin uptime, and both feature toggles. Channel availability is
-a local JDA cache check; status does not perform a Discord REST request.
-`/minebridge reload` is admin-only, reloads the config, and replaces the JDA
-client. It reports configuration/startup errors immediately and reports success
-only after the Discord gateway is ready. If readiness is not confirmed within
-45 seconds, it reports the current JDA state rather than claiming success.
-Help and tab completion hide the reload action from users without
-`minebridge.admin`.
-
-Discord events accepted before a successful client swap finish using that
-client's immutable configuration snapshot. Events arriving from the old client
-after the swap are ignored.
-
-Connection, channel-availability, and outgoing-drop diagnostics are rate
-limited per category. Diagnostics contain actionable configuration/network
-guidance and do not include token values.
-
-Outgoing messages use a bounded queue of 100 messages. Messages are retained
-while disconnected or while the configured channel cannot be resolved from
-JDA's cache. If the queue is full, a new message is dropped and a rate-limited
-warning is logged. Messages longer than Discord's 2000-character limit are
-dropped rather than truncated, and one rate-limited warning is emitted per
-diagnostic interval. Minecraft formatting control codes are removed from
-relayed user text and line breaks are normalized to spaces. Discord
-`@everyone` and `@here` in relayed Minecraft text are neutralized; JDA also
-disables all parsed mentions for outgoing messages. Discord Markdown syntax in
-user-controlled Minecraft text is escaped, while trusted configured templates
-retain their formatting. Other Unicode, including emoji, is preserved. Discord
-message syntax such as `<@id>` is shown as text in Minecraft and does not
-execute commands or formatting.
-
-Incoming Discord text is sanitized, and empty or over-2000-character messages
-are ignored. Only messages from the configured guild channel are relayed; bot
-and webhook messages are filtered out.
-
-API-rejected messages are not retried, to avoid duplicate delivery; therefore a
-network failure after JDA accepts a request can lose that message. Messages
-remain FIFO while queued, and only one Discord send is in flight at a time.
-The in-memory queue is discarded on plugin shutdown. A message accepted by
-Discord but whose success callback is interrupted by shutdown has an
-indeterminate delivery result.
-
-Discord-to-Minecraft messages use a separate bounded FIFO queue with capacity
-100 and are drained on the Minecraft thread in batches of at most 10 per tick.
-When the queue is full, the newest message is dropped and a rate-limited warning
-is logged. Inbound relay also limits each Discord user to a burst of 3 messages,
-replenishing to full over 5 seconds, and all users together to a burst of 10
-messages, replenishing to full over 1 second. Rate-limited messages are silently
-discarded. Pending inbound messages are discarded when the plugin shuts down.
+MineBridge is licensed under the MIT License. See [LICENSE](LICENSE) for details.

@@ -11,6 +11,30 @@ release.
 
 - No unreleased changes.
 
+## [1.3.0] - 2026-11-20
+
+### Added
+
+- Dual integration modes: `BOT` (default) and `WEBHOOK`, configurable via `discord.mode`.
+- Outgoing Minecraft-to-Discord Webhook support (`WebhookService`) with asynchronous HTTP delivery via OkHttp, supporting text chat, player joins/leaves, deaths, and advancements.
+- Custom Discord webhook username and avatar URL formatting with `{player}` and `{server}` placeholders.
+- Discord embed footer customization (`discord.embed.footer.text` and `icon-url`) with `{server}` placeholder expansion.
+- Optional LuckPerms soft-dependency hook (`LuckPermsHook`) resolving cached group prefixes (`{prefix}`) in message templates safely and non-blockingly.
+- Mode-aware status reporting in `/minebridge status`, displaying active integration mode, destination health, queue metrics, dropped counts, and LuckPerms availability.
+
+### Improved
+
+- Centralized integration lifecycle management with `LifecycleManager`, ensuring mutually exclusive startup for BOT and WEBHOOK modes.
+- Dynamic zero-event-leak configuration reload handling: seamlessly transitions between BOT and WEBHOOK modes without re-registering Bukkit listeners.
+- Resilient Discord HTTP 429 rate-limiting with exponential backoff and JSON `retry_after` / HTTP `Retry-After` header parsing.
+- Single-pass non-recursive placeholder expansion in `RelayMessageFormatter` preventing placeholder injection.
+- Secret masking: Webhook URLs and Discord bot tokens are strictly scrubbed and never exposed in logs or command outputs.
+
+### Compatibility
+
+- Full backward compatibility: `BOT` remains the default mode, and existing `discord.bot-token` / `channel-id` configurations require zero changes.
+- Soft-dependency on LuckPerms: graceful fallback to empty prefix when LuckPerms is absent, disabled, or unconfigured.
+
 ## [1.2.1] - 2026-11-18
 
 ### Added

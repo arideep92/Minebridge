@@ -23,10 +23,26 @@ public final class RelayMessageFormatter {
 
     public static String formatForDiscord(
             String template, String player, String message, String timestamp) {
+        return formatForDiscord(template, player, message, timestamp, "", "");
+    }
+
+    public static String formatForDiscord(
+            String template,
+            String player,
+            String message,
+            String timestamp,
+            String server,
+            String prefix) {
+        String effectiveServer = server != null && !server.isBlank()
+                ? server : "Minecraft Server";
+        String effectivePrefix = prefix != null ? prefix : "";
+
         return replacePlaceholders(template, Map.of(
                 "player", escapeDiscordUserText(player),
                 "message", escapeDiscordUserText(message),
-                "timestamp", escapeDiscordUserText(timestamp)));
+                "timestamp", escapeDiscordUserText(timestamp),
+                "server", escapeDiscordUserText(effectiveServer),
+                "prefix", escapeDiscordPrefix(effectivePrefix)));
     }
 
     public static String formatForMinecraft(String template, String player, String message) {
@@ -40,12 +56,64 @@ public final class RelayMessageFormatter {
             String username,
             String message,
             String timestamp) {
+        return formatForMinecraft(
+                template, player, displayName, username, message, timestamp, "", "");
+    }
+
+    public static String formatForMinecraft(
+            String template,
+            String player,
+            String displayName,
+            String username,
+            String message,
+            String timestamp,
+            String server,
+            String prefix) {
+        String effectiveServer = server != null && !server.isBlank()
+                ? server : "Minecraft Server";
+        String effectivePrefix = prefix != null ? prefix : "";
+
         return replacePlaceholders(template, Map.of(
                 "player", sanitizeText(player),
                 "display_name", sanitizeText(displayName),
                 "username", sanitizeText(username),
                 "message", sanitizeText(message),
-                "timestamp", sanitizeText(timestamp)));
+                "timestamp", sanitizeText(timestamp),
+                "server", sanitizeText(effectiveServer),
+                "prefix", sanitizePrefix(effectivePrefix)));
+    }
+
+    public static String sanitizePrefix(String input) {
+        if (input == null || input.isEmpty()) {
+            return "";
+        }
+
+        String sanitized = MINECRAFT_FORMATTING.matcher(input).replaceAll("")
+                .replace("§", "")
+                .replace('\r', ' ')
+                .replace('\n', ' ')
+                .replace('\t', ' ');
+        StringBuilder safe = new StringBuilder(sanitized.length());
+        for (int index = 0; index < sanitized.length(); index++) {
+            char current = sanitized.charAt(index);
+            if (Character.isHighSurrogate(current)) {
+                if (index + 1 < sanitized.length()
+                        && Character.isLowSurrogate(sanitized.charAt(index + 1))) {
+                    safe.append(current).append(sanitized.charAt(++index));
+                }
+            } else if (!Character.isLowSurrogate(current)
+                    && !Character.isISOControl(current)) {
+                safe.append(current);
+            }
+        }
+        return safe.toString();
+    }
+
+    public static String escapeDiscordPrefix(String input) {
+        String sanitized = sanitizePrefix(input);
+        String markdownEscaped = DISCORD_MARKDOWN.matcher(sanitized)
+                .replaceAll("\\\\$1");
+        return escapeDiscordMassMentions(markdownEscaped);
     }
 
     public static String sanitizeText(String input) {

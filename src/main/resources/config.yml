@@ -1,24 +1,114 @@
+# ==============================================================================
+# MineBridge Configuration (v1.3.0 — The Dual Integration Update)
+# ==============================================================================
+# MineBridge connects Minecraft and Discord with two selectable integration modes:
+#
+# 1. BOT Mode (Default):
+#    - Two-way chat relay (Minecraft <-> Discord) and outbound event embeds.
+#    - Requires a Discord bot application with Message Content Intent enabled.
+#    - Requires 'discord.bot-token' (or MINEBRIDGE_BOT_TOKEN environment variable)
+#      and 'discord.channel-id'.
+#
+# 2. WEBHOOK Mode:
+#    - One-way outbound delivery (Minecraft -> Discord) using asynchronous HTTP webhooks.
+#    - Delivers chat messages, player joins/leaves, deaths, and advancements.
+#    - Requires 'discord.webhook.url' (a valid Discord webhook HTTPS URL).
+#    - Does NOT require a bot token, bot application, or channel ID.
+#    - NOTE: WEBHOOK mode is outbound-only; it cannot receive messages from Discord.
+#
+# ------------------------------------------------------------------------------
+# Example Configuration: BOT Mode
+# ------------------------------------------------------------------------------
+# discord:
+#   mode: BOT
+#   bot-token: "YOUR_DISCORD_BOT_TOKEN_HERE" # Or use env var MINEBRIDGE_BOT_TOKEN
+#   channel-id: "123456789012345678"
+# server:
+#   name: "Survival SMP"
+#
+# ------------------------------------------------------------------------------
+# Example Configuration: WEBHOOK Mode
+# ------------------------------------------------------------------------------
+# discord:
+#   mode: WEBHOOK
+#   webhook:
+#     url: "https://discord.com/api/webhooks/123456789012345678/abcdefg_hijk..."
+#     username: "{player}"
+#     avatar-url: "https://mc-heads.net/avatar/{player}/100"
+#   embed:
+#     footer:
+#       text: "{server} Events"
+#       icon-url: ""
+# server:
+#   name: "Survival SMP"
+# ==============================================================================
+
 discord:
-  # Prefer setting MINEBRIDGE_BOT_TOKEN as an environment variable.
+  # Integration mode: BOT or WEBHOOK (case-insensitive, default: BOT).
+  mode: BOT
+
+  # BOT Mode Settings:
+  # Prefer setting MINEBRIDGE_BOT_TOKEN as an environment variable in production.
+  # Do not commit real tokens to source control.
   bot-token: ""
+  # 17-20 digit Snowflake ID of the main Discord channel.
   channel-id: ""
 
+  # WEBHOOK Mode Settings:
+  webhook:
+    # Discord webhook URL obtained from Channel Settings -> Integrations -> Webhooks.
+    # Must start with https:// and point to discord.com or discordapp.com.
+    # Ignored in BOT mode; required in WEBHOOK mode.
+    url: ""
+    # Webhook author display username. Supports placeholders: {player}, {server}.
+    # Defaults to '{player}' to display the sending Minecraft player's username.
+    username: "{player}"
+    # Webhook author avatar icon URL. Supports: {player}.
+    # Example: "https://mc-heads.net/avatar/{player}/100"
+    avatar-url: ""
+
+  # Embed Customization (Used by event embeds in both BOT and WEBHOOK modes):
+  embed:
+    footer:
+      # Embed footer text. Supports placeholder: {server}.
+      # Leave blank to fall back to 'discord-events.embeds.footer'.
+      text: ""
+      # Embed footer icon URL (optional). Must be a valid HTTP(S) URL or blank.
+      icon-url: ""
+
+# Server metadata used across embed footers and templates via the {server} placeholder.
+server:
+  name: "Minecraft Server"
+
 messages:
-  # Allowed: {player}, {message}, {timestamp} (UTC ISO-8601).
+  # Outgoing Minecraft-to-Discord chat template.
+  # Allowed placeholders: {player}, {message}, {timestamp} (UTC ISO-8601), {server}, {prefix}.
+  # Note: {prefix} requires LuckPerms (optional soft dependency).
   minecraft-to-discord: "**{player}**: {message}"
-  # Allowed: {player}, {display_name}, {username}, {message}, {timestamp}.
+
+  # Incoming Discord-to-Minecraft chat template (BOT mode only).
+  # Allowed placeholders: {player}, {display_name}, {username}, {message}, {timestamp}, {server}, {prefix}.
   discord-to-minecraft: "&9[Discord] &f{player}: {message}"
-  # Join/leave allow {player} and {timestamp} (UTC ISO-8601).
+
+  # Join and leave message templates.
+  # Allowed placeholders: {player}, {timestamp} (UTC ISO-8601), {server}.
   player-join: "🟢 **{player}** joined the server."
   player-leave: "🔴 **{player}** left the server."
-  # Server status allows {online} and {max}; player list also allows {players}.
+
+  # Server status and player list templates (/minebridge server, /minebridge players).
+  # server-status supports: {online}, {max}.
+  # player-list supports: {online}, {max}, {players}.
   server-status: "&7Server &8| &a{online}&7/&f{max} players online"
   player-list: "&7Online players (&f{online}&7/&f{max}&7): {players}"
 
 features:
+  # Enable chat synchronization (inbound and outbound for BOT, outbound only for WEBHOOK).
   chat-relay: true
+  # Enable player join/leave broadcasts and Discord embeds.
   join-leave-notifications: true
+  # Enable /minebridge server command.
   server-status: true
+  # Enable /minebridge players command.
   player-list: true
 
 death-messages:
@@ -30,7 +120,8 @@ death-messages:
 
   discord:
     enabled: true
-    # Leave blank to use discord.channel-id.
+    # Channel ID for death embeds in BOT mode. Leave blank to use discord.channel-id.
+    # In WEBHOOK mode, notifications are sent to the configured discord.webhook.url.
     channel-id: ""
     embed: true
     title: "☠ Player death"
@@ -70,7 +161,8 @@ achievements:
 
   discord:
     enabled: true
-    # Leave blank to use discord.channel-id.
+    # Channel ID for advancement embeds in BOT mode. Leave blank to use discord.channel-id.
+    # In WEBHOOK mode, notifications are sent to the configured discord.webhook.url.
     channel-id: ""
     title: "ADVANCEMENT UNLOCKED"
     description: "{player} has unlocked {title}.\n{description}"

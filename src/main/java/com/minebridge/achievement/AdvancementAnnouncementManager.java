@@ -7,6 +7,7 @@ import com.minebridge.discord.DiscordEmbedFactory;
 import com.minebridge.discord.DiscordEventNotifier;
 import com.minebridge.discord.DiscordEventsPolicy;
 import com.minebridge.discord.DiscordService;
+import com.minebridge.discord.WebhookService;
 import org.bukkit.advancement.Advancement;
 import org.bukkit.advancement.AdvancementDisplay;
 import org.bukkit.entity.Player;
@@ -22,6 +23,21 @@ public final class AdvancementAnnouncementManager {
     public AdvancementAnnouncementManager(
             MineBridgePlugin plugin, ConfigManager config, DiscordService discord) {
         this(plugin, config, new DiscordEventNotifier(discord, config),
+                new AdvancementAnnouncementDeduplicator());
+    }
+
+    public AdvancementAnnouncementManager(
+            MineBridgePlugin plugin, ConfigManager config, WebhookService webhook) {
+        this(plugin, config, new DiscordEventNotifier(webhook, config),
+                new AdvancementAnnouncementDeduplicator());
+    }
+
+    public AdvancementAnnouncementManager(
+            MineBridgePlugin plugin,
+            ConfigManager config,
+            DiscordService discord,
+            WebhookService webhook) {
+        this(plugin, config, new DiscordEventNotifier(discord, webhook, config),
                 new AdvancementAnnouncementDeduplicator());
     }
 
@@ -101,6 +117,7 @@ public final class AdvancementAnnouncementManager {
                         context.challenge(),
                         color,
                         notifier.footer(),
+                        notifier.footerIconUrl(),
                         java.time.Instant.now());
                 String channelId = eventSettings.achievementsChannelId().isBlank()
                         ? settings.discordChannelId().isBlank()

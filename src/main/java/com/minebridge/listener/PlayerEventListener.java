@@ -6,6 +6,7 @@ import com.minebridge.discord.DiscordEventNotifier;
 import com.minebridge.discord.DiscordEventsPolicy;
 import com.minebridge.discord.DiscordService;
 import com.minebridge.discord.RelayMessageFormatter;
+import com.minebridge.discord.WebhookService;
 import com.minebridge.config.ConfigManager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -19,6 +20,15 @@ public final class PlayerEventListener implements Listener {
 
     public PlayerEventListener(DiscordService discord, ConfigManager config) {
         this(new DiscordEventNotifier(discord, config), config);
+    }
+
+    public PlayerEventListener(WebhookService webhook, ConfigManager config) {
+        this(new DiscordEventNotifier(webhook, config), config);
+    }
+
+    public PlayerEventListener(
+            DiscordService discord, WebhookService webhook, ConfigManager config) {
+        this(new DiscordEventNotifier(discord, webhook, config), config);
     }
 
     public PlayerEventListener(DiscordEventNotifier notifier, ConfigManager config) {
@@ -44,9 +54,14 @@ public final class PlayerEventListener implements Listener {
                         "messages.player-join",
                         "🟢 **{player}** joined the server.");
         String description = RelayMessageFormatter.formatForDiscord(
-                template, player.getName(), "", java.time.Instant.now().toString());
+                template,
+                player.getName(),
+                "",
+                java.time.Instant.now().toString(),
+                current.serverName(),
+                "");
         var embed = DiscordEmbedFactory.playerJoined(
-                player.getName(), description, welcome, notifier.footer());
+                player.getName(), description, welcome, notifier.footer(), notifier.footerIconUrl());
         String channelId = settings.playerEventsChannelId().isBlank()
                 ? current.channelId() : settings.playerEventsChannelId();
         notifier.send(channelId, embed);
@@ -68,11 +83,13 @@ public final class PlayerEventListener implements Listener {
                         "🔴 **{player}** left the server."),
                 player.getName(),
                 "",
-                java.time.Instant.now().toString());
+                java.time.Instant.now().toString(),
+                current.serverName(),
+                "");
         notifier.send(
                 settings.playerEventsChannelId().isBlank()
                         ? current.channelId() : settings.playerEventsChannelId(),
                 DiscordEmbedFactory.playerLeft(
-                        player.getName(), description, notifier.footer()));
+                        player.getName(), description, notifier.footer(), notifier.footerIconUrl()));
     }
 }

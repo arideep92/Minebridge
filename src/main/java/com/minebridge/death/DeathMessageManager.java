@@ -7,6 +7,7 @@ import com.minebridge.discord.DiscordEventDeduplicator;
 import com.minebridge.discord.DiscordEventNotifier;
 import com.minebridge.discord.DiscordEventsPolicy;
 import com.minebridge.discord.DiscordService;
+import com.minebridge.discord.WebhookService;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -25,6 +26,19 @@ public final class DeathMessageManager {
     public DeathMessageManager(
             MineBridgePlugin plugin, ConfigManager config, DiscordService discord) {
         this(plugin, config, new DiscordEventNotifier(discord, config));
+    }
+
+    public DeathMessageManager(
+            MineBridgePlugin plugin, ConfigManager config, WebhookService webhook) {
+        this(plugin, config, new DiscordEventNotifier(webhook, config));
+    }
+
+    public DeathMessageManager(
+            MineBridgePlugin plugin,
+            ConfigManager config,
+            DiscordService discord,
+            WebhookService webhook) {
+        this(plugin, config, new DiscordEventNotifier(discord, webhook, config));
     }
 
     public DeathMessageManager(
