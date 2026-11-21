@@ -9,6 +9,8 @@ public final class RelayMessageFormatter {
 
     private static final Pattern MINECRAFT_FORMATTING =
             Pattern.compile("(?i)§(?:[0-9A-FK-OR]|x(?:§[0-9A-F]){6})");
+    private static final Pattern AMPERSAND_FORMATTING =
+            Pattern.compile("(?i)&(?:[0-9A-FK-OR]|x(?:&[0-9A-F]){6})");
     private static final Pattern DISCORD_MASS_MENTION =
             Pattern.compile("(?i)@(everyone|here)\\b");
     private static final Pattern DISCORD_MARKDOWN =
@@ -33,16 +35,59 @@ public final class RelayMessageFormatter {
             String timestamp,
             String server,
             String prefix) {
+        return formatForDiscord(template, player, player, message, timestamp, server, prefix, "", "", "");
+    }
+
+    public static String formatForDiscord(
+            String template,
+            String player,
+            String nickname,
+            String message,
+            String timestamp,
+            String server,
+            String prefix,
+            String suffix,
+            String world,
+            String worldAlias) {
         String effectiveServer = server != null && !server.isBlank()
                 ? server : "Minecraft Server";
         String effectivePrefix = prefix != null ? prefix : "";
+        String effectiveSuffix = suffix != null ? suffix : "";
+        String effectiveNickname = (nickname != null && !nickname.isBlank()) ? nickname : (player != null ? player : "");
+        String effectiveWorld = world != null ? world : "";
+        String effectiveWorldAlias = (worldAlias != null && !worldAlias.isBlank()) ? worldAlias : effectiveWorld;
 
-        return replacePlaceholders(template, Map.of(
+        String preparedTemplate = template != null ? template : "";
+        String formattedPrefix = "";
+        String formattedSuffix = "";
+
+        if (!effectivePrefix.isBlank()) {
+            String sanitized = escapeDiscordPrefix(effectivePrefix.trim());
+            formattedPrefix = sanitized + " ";
+            preparedTemplate = preparedTemplate.replace("{prefix} ", "{prefix}");
+        } else {
+            preparedTemplate = preparedTemplate.replace("{prefix} ", "");
+        }
+
+        if (!effectiveSuffix.isBlank()) {
+            String sanitized = escapeDiscordPrefix(effectiveSuffix.trim());
+            formattedSuffix = " " + sanitized;
+            preparedTemplate = preparedTemplate.replace(" {suffix}", "{suffix}");
+        } else {
+            preparedTemplate = preparedTemplate.replace(" {suffix}", "");
+        }
+
+        return replacePlaceholders(preparedTemplate, Map.of(
                 "player", escapeDiscordUserText(player),
+                "nickname", escapeDiscordUserText(effectiveNickname),
+                "display_name", escapeDiscordUserText(effectiveNickname),
                 "message", escapeDiscordUserText(message),
                 "timestamp", escapeDiscordUserText(timestamp),
                 "server", escapeDiscordUserText(effectiveServer),
-                "prefix", escapeDiscordPrefix(effectivePrefix)));
+                "world", escapeDiscordUserText(effectiveWorld),
+                "world_alias", escapeDiscordUserText(effectiveWorldAlias),
+                "prefix", formattedPrefix,
+                "suffix", formattedSuffix));
     }
 
     public static String formatForMinecraft(String template, String player, String message) {
@@ -69,18 +114,53 @@ public final class RelayMessageFormatter {
             String timestamp,
             String server,
             String prefix) {
+        return formatForMinecraft(template, player, displayName, username, message, timestamp, server, prefix, "");
+    }
+
+    public static String formatForMinecraft(
+            String template,
+            String player,
+            String displayName,
+            String username,
+            String message,
+            String timestamp,
+            String server,
+            String prefix,
+            String suffix) {
         String effectiveServer = server != null && !server.isBlank()
                 ? server : "Minecraft Server";
         String effectivePrefix = prefix != null ? prefix : "";
+        String effectiveSuffix = suffix != null ? suffix : "";
 
-        return replacePlaceholders(template, Map.of(
+        String preparedTemplate = template != null ? template : "";
+        String formattedPrefix = "";
+        String formattedSuffix = "";
+
+        if (!effectivePrefix.isBlank()) {
+            String sanitized = sanitizePrefix(effectivePrefix.trim());
+            formattedPrefix = sanitized + " ";
+            preparedTemplate = preparedTemplate.replace("{prefix} ", "{prefix}");
+        } else {
+            preparedTemplate = preparedTemplate.replace("{prefix} ", "");
+        }
+
+        if (!effectiveSuffix.isBlank()) {
+            String sanitized = sanitizePrefix(effectiveSuffix.trim());
+            formattedSuffix = " " + sanitized;
+            preparedTemplate = preparedTemplate.replace(" {suffix}", "{suffix}");
+        } else {
+            preparedTemplate = preparedTemplate.replace(" {suffix}", "");
+        }
+
+        return replacePlaceholders(preparedTemplate, Map.of(
                 "player", sanitizeText(player),
                 "display_name", sanitizeText(displayName),
                 "username", sanitizeText(username),
                 "message", sanitizeText(message),
                 "timestamp", sanitizeText(timestamp),
                 "server", sanitizeText(effectiveServer),
-                "prefix", sanitizePrefix(effectivePrefix)));
+                "prefix", formattedPrefix,
+                "suffix", formattedSuffix));
     }
 
     public static String sanitizePrefix(String input) {
@@ -88,7 +168,8 @@ public final class RelayMessageFormatter {
             return "";
         }
 
-        String sanitized = MINECRAFT_FORMATTING.matcher(input).replaceAll("")
+        String sanitized = AMPERSAND_FORMATTING.matcher(
+                MINECRAFT_FORMATTING.matcher(input).replaceAll("")).replaceAll("")
                 .replace("§", "")
                 .replace('\r', ' ')
                 .replace('\n', ' ')
@@ -107,6 +188,60 @@ public final class RelayMessageFormatter {
             }
         }
         return safe.toString();
+    }
+
+    public static String formatWebhookUsername(
+            String template, String player, String server, String prefix) {
+        return formatWebhookUsername(template, player, player, server, prefix, "", "", "");
+    }
+
+    public static String formatWebhookUsername(
+            String template,
+            String player,
+            String nickname,
+            String server,
+            String prefix,
+            String suffix,
+            String world,
+            String worldAlias) {
+        String effectiveTemplate = template != null && !template.isBlank() ? template : "{prefix}{player}";
+        String effectivePrefix = prefix != null ? prefix.trim() : "";
+        String effectiveSuffix = suffix != null ? suffix.trim() : "";
+        String effectiveServer = server != null ? server : "";
+        String effectivePlayer = player != null ? player : "";
+        String effectiveNickname = (nickname != null && !nickname.isBlank()) ? nickname : effectivePlayer;
+        String effectiveWorld = world != null ? world : "";
+        String effectiveWorldAlias = (worldAlias != null && !worldAlias.isBlank()) ? worldAlias : effectiveWorld;
+
+        String preparedTemplate = effectiveTemplate;
+        String formattedPrefix = "";
+        String formattedSuffix = "";
+
+        if (!effectivePrefix.isBlank()) {
+            String sanitized = sanitizePrefix(effectivePrefix);
+            formattedPrefix = sanitized + " ";
+            preparedTemplate = preparedTemplate.replace("{prefix} ", "{prefix}");
+        } else {
+            preparedTemplate = preparedTemplate.replace("{prefix} ", "");
+        }
+
+        if (!effectiveSuffix.isBlank()) {
+            String sanitized = sanitizePrefix(effectiveSuffix);
+            formattedSuffix = " " + sanitized;
+            preparedTemplate = preparedTemplate.replace(" {suffix}", "{suffix}");
+        } else {
+            preparedTemplate = preparedTemplate.replace(" {suffix}", "");
+        }
+
+        return preparedTemplate
+                .replace("{prefix}", formattedPrefix)
+                .replace("{suffix}", formattedSuffix)
+                .replace("{player}", effectivePlayer)
+                .replace("{nickname}", effectiveNickname)
+                .replace("{display_name}", effectiveNickname)
+                .replace("{server}", effectiveServer)
+                .replace("{world}", effectiveWorld)
+                .replace("{world_alias}", effectiveWorldAlias);
     }
 
     public static String escapeDiscordPrefix(String input) {

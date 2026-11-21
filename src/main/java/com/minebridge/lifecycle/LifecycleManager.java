@@ -7,6 +7,7 @@ import com.minebridge.discord.DiscordService;
 import com.minebridge.discord.IntegrationMode;
 import com.minebridge.discord.ReloadResult;
 import com.minebridge.discord.WebhookService;
+import com.minebridge.hook.ChatMetadataService;
 import com.minebridge.hook.LuckPermsHook;
 import com.minebridge.listener.ChatListener;
 
@@ -25,6 +26,7 @@ public final class LifecycleManager {
 
     private final ConfigManager configManager;
     private final Supplier<ConfigManager.Candidate> candidateSupplier;
+    private final ChatMetadataService chatMetadataService;
     private final LuckPermsHook luckPermsHook;
     private final Function<ConfigManager, DiscordService> discordServiceFactory;
     private final Function<ConfigManager, WebhookService> webhookServiceFactory;
@@ -55,7 +57,32 @@ public final class LifecycleManager {
         this(
                 configManager,
                 null,
-                luckPermsHook,
+                new ChatMetadataService(luckPermsHook, null, null, null, null),
+                discordServiceFactory,
+                webhookServiceFactory,
+                asyncRunner,
+                botSchedulerStarter,
+                botSchedulerCanceler,
+                infoLogger,
+                warningLogger,
+                uptimeSupplier);
+    }
+
+    public LifecycleManager(
+            ConfigManager configManager,
+            ChatMetadataService chatMetadataService,
+            Function<ConfigManager, DiscordService> discordServiceFactory,
+            Function<ConfigManager, WebhookService> webhookServiceFactory,
+            Consumer<Runnable> asyncRunner,
+            Runnable botSchedulerStarter,
+            Runnable botSchedulerCanceler,
+            Consumer<String> infoLogger,
+            Consumer<String> warningLogger,
+            LongSupplier uptimeSupplier) {
+        this(
+                configManager,
+                null,
+                chatMetadataService,
                 discordServiceFactory,
                 webhookServiceFactory,
                 asyncRunner,
@@ -78,6 +105,32 @@ public final class LifecycleManager {
             Consumer<String> infoLogger,
             Consumer<String> warningLogger,
             LongSupplier uptimeSupplier) {
+        this(
+                configManager,
+                candidateSupplier,
+                new ChatMetadataService(luckPermsHook, null, null, null, null),
+                discordServiceFactory,
+                webhookServiceFactory,
+                asyncRunner,
+                botSchedulerStarter,
+                botSchedulerCanceler,
+                infoLogger,
+                warningLogger,
+                uptimeSupplier);
+    }
+
+    public LifecycleManager(
+            ConfigManager configManager,
+            Supplier<ConfigManager.Candidate> candidateSupplier,
+            ChatMetadataService chatMetadataService,
+            Function<ConfigManager, DiscordService> discordServiceFactory,
+            Function<ConfigManager, WebhookService> webhookServiceFactory,
+            Consumer<Runnable> asyncRunner,
+            Runnable botSchedulerStarter,
+            Runnable botSchedulerCanceler,
+            Consumer<String> infoLogger,
+            Consumer<String> warningLogger,
+            LongSupplier uptimeSupplier) {
         this.configManager = configManager;
         this.candidateSupplier = candidateSupplier != null
                 ? candidateSupplier
@@ -85,21 +138,25 @@ public final class LifecycleManager {
                     if (configManager != null) {
                         try {
                             return configManager.loadCandidate();
-                        } catch (Throwable ignored) {
-                            return new ConfigManager.Candidate(configManager.currentSettings(), List.of());
+                        } catch (Throwable t) {
+                            com.minebridge.hook.HookUtil.checkFatal(t);
+                            warningLogger.accept("Error loading configuration candidate: "
+                                    + t.getClass().getSimpleName() + (t.getMessage() != null ? ": " + t.getMessage() : ""));
+                            return new ConfigManager.Candidate(configManager.currentSettings(), List.of("Failed to load configuration: " + t.getMessage()));
                         }
                     }
                     return null;
                 };
-        this.luckPermsHook = luckPermsHook != null ? luckPermsHook : new LuckPermsHook();
+        this.warningLogger = warningLogger != null ? warningLogger : msg -> {};
+        this.uptimeSupplier = uptimeSupplier != null ? uptimeSupplier : () -> 0L;
+        this.chatMetadataService = chatMetadataService != null ? chatMetadataService : new ChatMetadataService(this.warningLogger);
+        this.luckPermsHook = this.chatMetadataService.getLuckPermsHook();
         this.discordServiceFactory = discordServiceFactory;
         this.webhookServiceFactory = webhookServiceFactory;
         this.asyncRunner = asyncRunner != null ? asyncRunner : Runnable::run;
         this.botSchedulerStarter = botSchedulerStarter != null ? botSchedulerStarter : () -> {};
         this.botSchedulerCanceler = botSchedulerCanceler != null ? botSchedulerCanceler : () -> {};
         this.infoLogger = infoLogger != null ? infoLogger : msg -> {};
-        this.warningLogger = warningLogger != null ? warningLogger : msg -> {};
-        this.uptimeSupplier = uptimeSupplier != null ? uptimeSupplier : () -> 0L;
     }
 
     public synchronized void start() {
@@ -109,10 +166,19 @@ public final class LifecycleManager {
 
         ConfigManager.Candidate initial = candidateSupplier != null ? candidateSupplier.get() : null;
         if (initial == null) {
+            warningLogger.accept("MineBridge configuration is null.");
+            if (eventNotifier == null) {
+                eventNotifier = new DiscordEventNotifier(discordService, webhookService, configManager);
+            }
+            if (chatListener == null) {
+                chatListener = new ChatListener(null, discordService, webhookService, configManager, chatMetadataService);
+            }
             return;
         }
-        if (initial.valid()) {
-            configManager.commit(initial);
+        if (initial.valid() && initial.settings() != null) {
+            if (configManager != null) {
+                configManager.commit(initial);
+            }
             if (initial.settings().mode() == IntegrationMode.WEBHOOK) {
                 webhookService = webhookServiceFactory.apply(configManager);
                 webhookService.start();
@@ -127,7 +193,10 @@ public final class LifecycleManager {
             }
         } else {
             initial.errors().forEach(err -> warningLogger.accept("MineBridge configuration: " + err));
-            if (initial.settings().mode() == IntegrationMode.WEBHOOK) {
+            warningLogger.accept("MineBridge started without a valid Discord configuration (e.g. missing Discord token). Discord integration is disabled until a valid configuration is provided via /mb reload.");
+            IntegrationMode mode = initial.settings() != null ? initial.settings().mode()
+                    : (configManager != null && configManager.currentSettings() != null ? configManager.currentSettings().mode() : IntegrationMode.BOT);
+            if (mode == IntegrationMode.WEBHOOK) {
                 webhookService = webhookServiceFactory.apply(configManager);
                 webhookService.markConfigurationInvalid();
             } else {
@@ -143,7 +212,7 @@ public final class LifecycleManager {
         }
 
         if (chatListener == null) {
-            chatListener = new ChatListener(null, discordService, webhookService, configManager, luckPermsHook);
+            chatListener = new ChatListener(null, discordService, webhookService, configManager, chatMetadataService);
         } else {
             chatListener.updateServices(discordService, webhookService);
         }
@@ -158,8 +227,10 @@ public final class LifecycleManager {
         }
 
         ConfigManager.Candidate candidate = candidateSupplier != null ? candidateSupplier.get() : null;
-        if (candidate == null || !candidate.valid()) {
-            List<String> errors = candidate != null ? candidate.errors() : List.of("Configuration is null");
+        if (candidate == null || !candidate.valid() || candidate.settings() == null) {
+            List<String> errors = candidate != null && !candidate.errors().isEmpty()
+                    ? candidate.errors()
+                    : List.of("Configuration is null");
             errors.forEach(err -> warningLogger.accept("MineBridge configuration: " + err));
             if (discordService != null) {
                 long req = discordService.beginReloadRequest();
@@ -171,10 +242,13 @@ public final class LifecycleManager {
             return;
         }
 
-        IntegrationMode currentMode = configManager.currentSettings().mode();
+        IntegrationMode currentMode = configManager != null && configManager.currentSettings() != null
+                ? configManager.currentSettings().mode()
+                : IntegrationMode.BOT;
         IntegrationMode targetMode = candidate.settings().mode();
 
         if (currentMode == IntegrationMode.BOT && targetMode == IntegrationMode.BOT) {
+            botSchedulerStarter.run();
             if (discordService != null) {
                 long requestId = discordService.beginReloadRequest();
                 asyncRunner.accept(() -> discordService.reload(requestId, candidate, result -> {
@@ -183,11 +257,12 @@ public final class LifecycleManager {
                     }
                 }));
             } else {
-                configManager.commit(candidate);
+                if (configManager != null) {
+                    configManager.commit(candidate);
+                }
                 discordService = discordServiceFactory.apply(configManager);
                 eventNotifier.updateServices(discordService, null);
                 chatListener.updateServices(discordService, null);
-                botSchedulerStarter.run();
                 asyncRunner.accept(() -> discordService.start(result -> {
                     if (callback != null) {
                         callback.accept(result);
@@ -198,11 +273,13 @@ public final class LifecycleManager {
         }
 
         if (currentMode == IntegrationMode.WEBHOOK && targetMode == IntegrationMode.WEBHOOK) {
-            configManager.commit(candidate);
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
             if (webhookService == null) {
                 webhookService = webhookServiceFactory.apply(configManager);
-                webhookService.start();
             }
+            webhookService.start();
             eventNotifier.updateServices(null, webhookService);
             chatListener.updateServices(null, webhookService);
             if (callback != null) {
@@ -217,7 +294,9 @@ public final class LifecycleManager {
                 discordService.stop();
                 discordService = null;
             }
-            configManager.commit(candidate);
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
             webhookService = webhookServiceFactory.apply(configManager);
             webhookService.start();
             eventNotifier.updateServices(null, webhookService);
@@ -234,7 +313,9 @@ public final class LifecycleManager {
                 webhookService.stop();
                 webhookService = null;
             }
-            configManager.commit(candidate);
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
             discordService = discordServiceFactory.apply(configManager);
             eventNotifier.updateServices(discordService, null);
             chatListener.updateServices(discordService, null);
@@ -275,17 +356,26 @@ public final class LifecycleManager {
     }
 
     public MineBridgeStatus getStatus() {
-        ConfigManager.Settings settings = configManager.currentSettings();
-        IntegrationMode mode = settings.mode();
-        boolean luckPermsAvailable = luckPermsHook != null && luckPermsHook.isAvailable();
+        ConfigManager.Settings settings = configManager != null ? configManager.currentSettings() : null;
+        IntegrationMode mode = settings != null ? settings.mode() : IntegrationMode.BOT;
+        boolean luckPermsAvailable = false;
+        try {
+            luckPermsAvailable = luckPermsHook != null && luckPermsHook.isAvailable();
+        } catch (Throwable t) {
+            com.minebridge.hook.HookUtil.checkFatal(t);
+            warningLogger.accept("Optional integration LuckPerms failed during isAvailable: "
+                    + t.getClass().getSimpleName() + (t.getMessage() != null ? ": " + t.getMessage() : ""));
+        }
         long uptime = uptimeSupplier.getAsLong();
+        boolean chatEnabled = configManager != null && configManager.chatEnabled();
+        boolean eventsEnabled = configManager != null && configManager.eventsEnabled();
 
         if (mode == IntegrationMode.WEBHOOK) {
             if (webhookService != null) {
                 return webhookService.getStatus(
                         uptime,
-                        configManager.chatEnabled(),
-                        configManager.eventsEnabled(),
+                        chatEnabled,
+                        eventsEnabled,
                         luckPermsAvailable);
             }
             return new MineBridgeStatus(
@@ -295,8 +385,8 @@ public final class LifecycleManager {
                     0,
                     100,
                     uptime,
-                    configManager.chatEnabled(),
-                    configManager.eventsEnabled(),
+                    chatEnabled,
+                    eventsEnabled,
                     0L,
                     luckPermsAvailable);
         } else {
@@ -321,8 +411,8 @@ public final class LifecycleManager {
                     0,
                     100,
                     uptime,
-                    configManager.chatEnabled(),
-                    configManager.eventsEnabled(),
+                    chatEnabled,
+                    eventsEnabled,
                     0L,
                     luckPermsAvailable);
         }
@@ -346,6 +436,10 @@ public final class LifecycleManager {
 
     public LuckPermsHook getLuckPermsHook() {
         return luckPermsHook;
+    }
+
+    public ChatMetadataService getChatMetadataService() {
+        return chatMetadataService;
     }
 
     public boolean isStopping() {

@@ -149,7 +149,7 @@ public final class DiscordService {
     }
 
     public boolean start(Consumer<ReloadResult> callback) {
-        ConfigManager.Settings settings = config.currentSettings();
+        ConfigManager.Settings settings = config != null ? config.currentSettings() : null;
         List<String> errors = ConfigManager.validateConfiguration(settings);
         if (!errors.isEmpty()) {
             reportConfigurationErrors(errors);
@@ -316,7 +316,7 @@ public final class DiscordService {
             JDA current = jda;
             String state = current == null
                     ? lastConnectionState : current.getStatus().name();
-            String channelId = config.getChannelId();
+            String channelId = config != null ? config.getChannelId() : "";
             boolean channelAvailable = current != null
                     && current.getStatus() == JDA.Status.CONNECTED
                     && channelId != null
@@ -329,8 +329,8 @@ public final class DiscordService {
                     outgoingQueue.size(),
                     outgoingQueue.capacity(),
                     uptimeMillis,
-                    config.chatEnabled(),
-                    config.eventsEnabled(),
+                    config != null && config.chatEnabled(),
+                    config != null && config.eventsEnabled(),
                     outgoingDropped.get(),
                     false);
         }
@@ -455,7 +455,7 @@ public final class DiscordService {
                 return;
             }
 
-            String channelId = config.getChannelId();
+            String channelId = config != null ? config.getChannelId() : "";
             channel = channelId == null || channelId.isBlank()
                     ? null : current.getTextChannelById(channelId);
             if (channel == null) {
@@ -583,7 +583,9 @@ public final class DiscordService {
                 ConfigManager.Settings activatedSettings = pendingSettings;
                 previous = jda;
                 boolean activated = reloadRequests.runIfCurrent(pendingRequestId, () -> {
-                    config.commit(new ConfigManager.Candidate(activatedSettings, List.of()));
+                    if (config != null) {
+                        config.commit(new ConfigManager.Candidate(activatedSettings, List.of()));
+                    }
                     jda = source;
                     incomingClient.activate(source, activatedSettings);
                 });

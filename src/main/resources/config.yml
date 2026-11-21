@@ -60,9 +60,9 @@ discord:
     # Must start with https:// and point to discord.com or discordapp.com.
     # Ignored in BOT mode; required in WEBHOOK mode.
     url: ""
-    # Webhook author display username. Supports placeholders: {player}, {server}.
-    # Defaults to '{player}' to display the sending Minecraft player's username.
-    username: "{player}"
+    # Webhook author display username. Supports placeholders: {player}, {server}, {prefix}.
+    # Defaults to '{prefix}{player}' to display the sending Minecraft player's username.
+    username: "{prefix}{player}"
     # Webhook author avatar icon URL. Supports: {player}.
     # Example: "https://mc-heads.net/avatar/{player}/100"
     avatar-url: ""
@@ -80,11 +80,21 @@ discord:
 server:
   name: "Minecraft Server"
 
+chat:
+  # Cross-world chat relay behavior:
+  # - GLOBAL: Relay public chat delivered to all online players across the server (default).
+  # - PER_WORLD: Relay public chat delivered to all players in the sender's current world.
+  # - FILTERED: Only relay chat originating from worlds listed in 'enabled-worlds'.
+  cross-world:
+    mode: GLOBAL
+    # Allowed worlds when mode is FILTERED:
+    enabled-worlds: []
+
 messages:
   # Outgoing Minecraft-to-Discord chat template.
-  # Allowed placeholders: {player}, {message}, {timestamp} (UTC ISO-8601), {server}, {prefix}.
-  # Note: {prefix} requires LuckPerms (optional soft dependency).
-  minecraft-to-discord: "**{player}**: {message}"
+  # Allowed placeholders: {player}, {nickname}, {display_name}, {message}, {timestamp} (UTC ISO-8601), {server}, {prefix}, {suffix}, {world}, {world_alias}.
+  # Note: {prefix} and {suffix} support LuckPerms/Vault; {nickname} supports EssentialsX; {world_alias} supports Multiverse-Core; PlaceholderAPI (%...%) is supported if installed.
+  minecraft-to-discord: "{prefix}**{player}**{suffix}: {message}"
 
   # Incoming Discord-to-Minecraft chat template (BOT mode only).
   # Allowed placeholders: {player}, {display_name}, {username}, {message}, {timestamp}, {server}, {prefix}.
