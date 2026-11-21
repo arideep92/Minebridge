@@ -6,25 +6,40 @@ import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.Method;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
  * Optional soft-dependency hook for LuckPerms.
- * Safely resolves player cached prefixes without hard compile or runtime dependencies
- * and without performing blocking I/O on the Minecraft server thread.
+ * Safely resolves player cached prefixes and suffixes using LuckPerms API context options
+ * without hard compile or runtime dependencies and without performing blocking I/O on the Minecraft server thread.
  */
 public class LuckPermsHook {
 
     private final BooleanSupplier enabledChecker;
-    private final Function<UUID, String> prefixResolver;
+    private final BiFunction<Player, UUID, String> prefixResolver;
+    private final BiFunction<Player, UUID, String> suffixResolver;
+    private final Consumer<String> errorLogger;
 
     /**
      * Standard runtime constructor for Bukkit.
      * Uses reflection to access LuckPerms 5.x if present.
      */
     public LuckPermsHook() {
-        this(LuckPermsHook::isLuckPermsPluginEnabled, new ReflectionPrefixResolver());
+        this((Consumer<String>) null);
+    }
+
+    /**
+     * Runtime constructor with an optional error logger.
+     */
+    public LuckPermsHook(Consumer<String> errorLogger) {
+        ReflectionMetaResolver resolver = new ReflectionMetaResolver(errorLogger);
+        this.enabledChecker = LuckPermsHook::isLuckPermsPluginEnabled;
+        this.prefixResolver = resolver::resolvePrefix;
+        this.suffixResolver = resolver::resolveSuffix;
+        this.errorLogger = errorLogger;
     }
 
     /**
@@ -34,8 +49,42 @@ public class LuckPermsHook {
      * @param prefixResolver function resolving a player's prefix by UUID
      */
     public LuckPermsHook(BooleanSupplier enabledChecker, Function<UUID, String> prefixResolver) {
+        this(enabledChecker, (player, uuid) -> prefixResolver != null ? prefixResolver.apply(uuid) : "", null, null);
+    }
+
+    /**
+     * Constructor allowing contextual adapters/mocks for unit tests.
+     *
+     * @param enabledChecker supplier indicating whether LuckPerms is installed and active
+     * @param prefixResolver bifunction resolving a player's prefix by Player and UUID
+     */
+    public LuckPermsHook(BooleanSupplier enabledChecker, BiFunction<Player, UUID, String> prefixResolver) {
+        this(enabledChecker, prefixResolver, null, null);
+    }
+
+    /**
+     * Full constructor for contextual prefix and suffix adapters.
+     *
+     * @param enabledChecker supplier indicating whether LuckPerms is installed and active
+     * @param prefixResolver bifunction resolving a player's prefix by Player and UUID
+     * @param suffixResolver bifunction resolving a player's suffix by Player and UUID
+     */
+    public LuckPermsHook(
+            BooleanSupplier enabledChecker,
+            BiFunction<Player, UUID, String> prefixResolver,
+            BiFunction<Player, UUID, String> suffixResolver) {
+        this(enabledChecker, prefixResolver, suffixResolver, null);
+    }
+
+    public LuckPermsHook(
+            BooleanSupplier enabledChecker,
+            BiFunction<Player, UUID, String> prefixResolver,
+            BiFunction<Player, UUID, String> suffixResolver,
+            Consumer<String> errorLogger) {
         this.enabledChecker = enabledChecker != null ? enabledChecker : () -> false;
-        this.prefixResolver = prefixResolver != null ? prefixResolver : uuid -> "";
+        this.prefixResolver = prefixResolver != null ? prefixResolver : (player, uuid) -> "";
+        this.suffixResolver = suffixResolver != null ? suffixResolver : (player, uuid) -> "";
+        this.errorLogger = errorLogger;
     }
 
     /**
@@ -46,26 +95,40 @@ public class LuckPermsHook {
     public boolean isAvailable() {
         try {
             return enabledChecker.getAsBoolean();
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            HookUtil.checkFatal(t);
+            if (errorLogger != null) {
+                errorLogger.accept("LuckPerms: failed during isAvailable: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+            }
             return false;
         }
     }
 
     /**
-     * Safely resolves a player's cached prefix.
+     * Safely resolves a player's effective cached prefix according to their current context.
      *
      * @param player Bukkit player
      * @return the player's prefix, or an empty string if unavailable
      */
     public String getPrefix(Player player) {
-        if (player == null) {
+        if (player == null || !isAvailable()) {
             return "";
         }
-        return getPrefix(player.getUniqueId());
+        try {
+            String prefix = prefixResolver.apply(player, player.getUniqueId());
+            return prefix != null ? prefix : "";
+        } catch (Throwable t) {
+            HookUtil.checkFatal(t);
+            if (errorLogger != null) {
+                errorLogger.accept("LuckPerms: failed during getPrefix: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+            }
+            return "";
+        }
     }
 
     /**
      * Safely resolves a player's cached prefix by UUID.
+     * If the player is online, attempts to use their current context.
      *
      * @param playerUuid player UUID
      * @return the player's prefix, or an empty string if unavailable
@@ -75,9 +138,74 @@ public class LuckPermsHook {
             return "";
         }
         try {
-            String prefix = prefixResolver.apply(playerUuid);
+            Player onlinePlayer = null;
+            try {
+                if (Bukkit.getServer() != null) {
+                    onlinePlayer = Bukkit.getPlayer(playerUuid);
+                }
+            } catch (Throwable ignored) {
+                HookUtil.checkFatal(ignored);
+            }
+            String prefix = prefixResolver.apply(onlinePlayer, playerUuid);
             return prefix != null ? prefix : "";
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            HookUtil.checkFatal(t);
+            if (errorLogger != null) {
+                errorLogger.accept("LuckPerms: failed during getPrefix: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+            }
+            return "";
+        }
+    }
+
+    /**
+     * Safely resolves a player's effective cached suffix according to their current context.
+     *
+     * @param player Bukkit player
+     * @return the player's suffix, or an empty string if unavailable
+     */
+    public String getSuffix(Player player) {
+        if (player == null || !isAvailable()) {
+            return "";
+        }
+        try {
+            String suffix = suffixResolver.apply(player, player.getUniqueId());
+            return suffix != null ? suffix : "";
+        } catch (Throwable t) {
+            HookUtil.checkFatal(t);
+            if (errorLogger != null) {
+                errorLogger.accept("LuckPerms: failed during getSuffix: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+            }
+            return "";
+        }
+    }
+
+    /**
+     * Safely resolves a player's cached suffix by UUID.
+     * If the player is online, attempts to use their current context.
+     *
+     * @param playerUuid player UUID
+     * @return the player's suffix, or an empty string if unavailable
+     */
+    public String getSuffix(UUID playerUuid) {
+        if (playerUuid == null || !isAvailable()) {
+            return "";
+        }
+        try {
+            Player onlinePlayer = null;
+            try {
+                if (Bukkit.getServer() != null) {
+                    onlinePlayer = Bukkit.getPlayer(playerUuid);
+                }
+            } catch (Throwable ignored) {
+                HookUtil.checkFatal(ignored);
+            }
+            String suffix = suffixResolver.apply(onlinePlayer, playerUuid);
+            return suffix != null ? suffix : "";
+        } catch (Throwable t) {
+            HookUtil.checkFatal(t);
+            if (errorLogger != null) {
+                errorLogger.accept("LuckPerms: failed during getSuffix: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+            }
             return "";
         }
     }
@@ -90,15 +218,18 @@ public class LuckPermsHook {
             Plugin plugin = Bukkit.getPluginManager().getPlugin("LuckPerms");
             return plugin != null && plugin.isEnabled();
         } catch (Throwable ignored) {
+            HookUtil.checkFatal(ignored);
             return false;
         }
     }
 
     /**
-     * Reflection-based prefix resolver for LuckPerms 5.x.
+     * Reflection-based metadata resolver for LuckPerms 5.x.
+     * Resolves effective prefixes and suffixes using the player's current QueryOptions context.
      * Strictly accesses in-memory cached metadata without database or network I/O.
      */
-    public static final class ReflectionPrefixResolver implements Function<UUID, String> {
+    public static final class ReflectionMetaResolver {
+        private final Consumer<String> errorLogger;
         private volatile boolean initialized;
         private volatile boolean available;
 
@@ -107,45 +238,196 @@ public class LuckPermsHook {
         private Method getUserMethod;
         private Method getCachedDataMethod;
         private Method getMetaDataMethod;
+        private Method getMetaDataWithOptionsMethod;
         private Method getPrefixMethod;
+        private Method getSuffixMethod;
+        private Method getContextManagerMethod;
+        private Method getQueryOptionsPlayerMethod;
+        private Method getQueryOptionsUserMethod;
 
-        public ReflectionPrefixResolver() {
+        public ReflectionMetaResolver() {
+            this(null);
+        }
+
+        public ReflectionMetaResolver(Consumer<String> errorLogger) {
+            this.errorLogger = errorLogger;
         }
 
         private synchronized void init() {
             if (initialized) {
                 return;
             }
-            initialized = true;
             try {
-                Class<?> providerClass = Class.forName("net.luckperms.api.LuckPermsProvider");
-                getApiMethod = providerClass.getMethod("get");
-                Class<?> luckPermsClass = Class.forName("net.luckperms.api.LuckPerms");
-                getUserManagerMethod = luckPermsClass.getMethod("getUserManager");
-                Class<?> userManagerClass = Class.forName("net.luckperms.api.model.user.UserManager");
-                getUserMethod = userManagerClass.getMethod("getUser", UUID.class);
-                Class<?> userClass = Class.forName("net.luckperms.api.model.user.User");
-                getCachedDataMethod = userClass.getMethod("getCachedData");
-                Class<?> cachedDataManagerClass = Class.forName("net.luckperms.api.cacheddata.CachedDataManager");
-                getMetaDataMethod = cachedDataManagerClass.getMethod("getMetaData");
-                Class<?> cachedMetaDataClass = Class.forName("net.luckperms.api.cacheddata.CachedMetaData");
-                getPrefixMethod = cachedMetaDataClass.getMethod("getPrefix");
-                available = true;
-            } catch (Throwable ignored) {
+                if (Bukkit.getServer() == null || Bukkit.getPluginManager() == null) {
+                    return;
+                }
+                Plugin lpPlugin = Bukkit.getPluginManager().getPlugin("LuckPerms");
+                if (lpPlugin == null || !lpPlugin.isEnabled()) {
+                    // Allow retrying later if load order enables LuckPerms after MineBridge
+                    return;
+                }
+
+                ClassLoader loader = lpPlugin.getClass().getClassLoader();
+
+                Class<?> providerClass = null;
+                try {
+                    providerClass = loader.loadClass("net.luckperms.api.LuckPermsProvider");
+                } catch (ClassNotFoundException e) {
+                    try {
+                        providerClass = Class.forName("net.luckperms.api.LuckPermsProvider");
+                    } catch (ClassNotFoundException ignored) {
+                    }
+                }
+
+                if (providerClass != null) {
+                    getApiMethod = providerClass.getMethod("get");
+                }
+
+                Class<?> luckPermsClass = null;
+                try {
+                    luckPermsClass = loader.loadClass("net.luckperms.api.LuckPerms");
+                } catch (ClassNotFoundException e) {
+                    try {
+                        luckPermsClass = Class.forName("net.luckperms.api.LuckPerms");
+                    } catch (ClassNotFoundException ignored) {
+                    }
+                }
+
+                if (luckPermsClass != null) {
+                    getUserManagerMethod = luckPermsClass.getMethod("getUserManager");
+                }
+
+                Class<?> userManagerClass = null;
+                try {
+                    userManagerClass = loader.loadClass("net.luckperms.api.model.user.UserManager");
+                } catch (ClassNotFoundException e) {
+                    try {
+                        userManagerClass = Class.forName("net.luckperms.api.model.user.UserManager");
+                    } catch (ClassNotFoundException ignored) {
+                    }
+                }
+
+                if (userManagerClass != null) {
+                    getUserMethod = userManagerClass.getMethod("getUser", UUID.class);
+                }
+
+                Class<?> userClass = null;
+                try {
+                    userClass = loader.loadClass("net.luckperms.api.model.user.User");
+                } catch (ClassNotFoundException e) {
+                    try {
+                        userClass = Class.forName("net.luckperms.api.model.user.User");
+                    } catch (ClassNotFoundException ignored) {
+                    }
+                }
+
+                if (userClass != null) {
+                    getCachedDataMethod = userClass.getMethod("getCachedData");
+                }
+
+                Class<?> cachedDataManagerClass = null;
+                try {
+                    cachedDataManagerClass = loader.loadClass("net.luckperms.api.cacheddata.CachedDataManager");
+                } catch (ClassNotFoundException e) {
+                    try {
+                        cachedDataManagerClass = Class.forName("net.luckperms.api.cacheddata.CachedDataManager");
+                    } catch (ClassNotFoundException ignored) {
+                    }
+                }
+
+                if (cachedDataManagerClass != null) {
+                    getMetaDataMethod = cachedDataManagerClass.getMethod("getMetaData");
+                }
+
+                Class<?> cachedMetaDataClass = null;
+                try {
+                    cachedMetaDataClass = loader.loadClass("net.luckperms.api.cacheddata.CachedMetaData");
+                } catch (ClassNotFoundException e) {
+                    try {
+                        cachedMetaDataClass = Class.forName("net.luckperms.api.cacheddata.CachedMetaData");
+                    } catch (ClassNotFoundException ignored) {
+                    }
+                }
+
+                if (cachedMetaDataClass != null) {
+                    getPrefixMethod = cachedMetaDataClass.getMethod("getPrefix");
+                    try {
+                        getSuffixMethod = cachedMetaDataClass.getMethod("getSuffix");
+                    } catch (Throwable ignored) {
+                    }
+                }
+
+                // ContextManager and contextual QueryOptions
+                if (luckPermsClass != null && cachedDataManagerClass != null) {
+                    try {
+                        getContextManagerMethod = luckPermsClass.getMethod("getContextManager");
+                        Class<?> contextManagerClass = null;
+                        try {
+                            contextManagerClass = loader.loadClass("net.luckperms.api.context.ContextManager");
+                        } catch (ClassNotFoundException e) {
+                            contextManagerClass = Class.forName("net.luckperms.api.context.ContextManager");
+                        }
+                        for (Method m : contextManagerClass.getMethods()) {
+                            if ("getQueryOptions".equals(m.getName()) && m.getParameterCount() == 1) {
+                                Class<?> paramType = m.getParameterTypes()[0];
+                                if (paramType.getName().contains("User")) {
+                                    getQueryOptionsUserMethod = m;
+                                } else {
+                                    getQueryOptionsPlayerMethod = m;
+                                }
+                            }
+                        }
+                        Class<?> queryOptionsClass = null;
+                        try {
+                            queryOptionsClass = loader.loadClass("net.luckperms.api.query.QueryOptions");
+                        } catch (ClassNotFoundException e) {
+                            queryOptionsClass = Class.forName("net.luckperms.api.query.QueryOptions");
+                        }
+                        getMetaDataWithOptionsMethod = cachedDataManagerClass.getMethod("getMetaData", queryOptionsClass);
+                    } catch (Throwable ignored) {
+                    }
+                }
+
+                initialized = true;
+                available = getApiMethod != null && getUserManagerMethod != null && getUserMethod != null;
+            } catch (Throwable t) {
+                HookUtil.checkFatal(t);
+                initialized = true;
                 available = false;
+                if (errorLogger != null) {
+                    errorLogger.accept("LuckPerms: failed to initialize reflection resolver: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                }
             }
         }
 
-        @Override
-        public String apply(UUID uuid) {
+        public String resolvePrefix(Player player, UUID uuid) {
+            return resolve(player, uuid, true);
+        }
+
+        public String resolveSuffix(Player player, UUID uuid) {
+            return resolve(player, uuid, false);
+        }
+
+        private String resolve(Player player, UUID uuid, boolean prefix) {
             if (!initialized) {
                 init();
             }
-            if (!available || uuid == null) {
+            if (!available) {
+                return "";
+            }
+            UUID targetUuid = uuid != null ? uuid : (player != null ? player.getUniqueId() : null);
+            if (targetUuid == null) {
                 return "";
             }
             try {
-                Object api = getApiMethod.invoke(null);
+                Object api = null;
+                try {
+                    api = getApiMethod.invoke(null);
+                } catch (Throwable t) {
+                    HookUtil.checkFatal(t);
+                    // Happens if LuckPerms API singleton isn't initialized yet
+                    return "";
+                }
                 if (api == null) {
                     return "";
                 }
@@ -153,8 +435,7 @@ public class LuckPermsHook {
                 if (userManager == null) {
                     return "";
                 }
-                // Strictly non-blocking cached user lookup; returns null if not loaded in memory
-                Object user = getUserMethod.invoke(userManager, uuid);
+                Object user = getUserMethod.invoke(userManager, targetUuid);
                 if (user == null) {
                     return "";
                 }
@@ -162,15 +443,80 @@ public class LuckPermsHook {
                 if (cachedData == null) {
                     return "";
                 }
-                Object metaData = getMetaDataMethod.invoke(cachedData);
+
+                Object metaData = null;
+                if (getContextManagerMethod != null && getMetaDataWithOptionsMethod != null) {
+                    try {
+                        Object contextManager = getContextManagerMethod.invoke(api);
+                        if (contextManager != null) {
+                            Object queryOptions = null;
+                            if (player != null && getQueryOptionsPlayerMethod != null) {
+                                try {
+                                    queryOptions = getQueryOptionsPlayerMethod.invoke(contextManager, player);
+                                } catch (Throwable ignored) {
+                                    HookUtil.checkFatal(ignored);
+                                }
+                            }
+                            if (queryOptions == null && getQueryOptionsUserMethod != null) {
+                                try {
+                                    queryOptions = getQueryOptionsUserMethod.invoke(contextManager, user);
+                                } catch (Throwable ignored) {
+                                    HookUtil.checkFatal(ignored);
+                                }
+                            }
+                            if (queryOptions != null) {
+                                metaData = getMetaDataWithOptionsMethod.invoke(cachedData, queryOptions);
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                        HookUtil.checkFatal(ignored);
+                    }
+                }
+
+                if (metaData == null && getMetaDataMethod != null) {
+                    metaData = getMetaDataMethod.invoke(cachedData);
+                }
+
                 if (metaData == null) {
                     return "";
                 }
-                Object prefix = getPrefixMethod.invoke(metaData);
-                return prefix != null ? (String) prefix : "";
-            } catch (Throwable ignored) {
+                Method targetMethod = prefix ? getPrefixMethod : getSuffixMethod;
+                if (targetMethod == null) {
+                    return "";
+                }
+                Object result = targetMethod.invoke(metaData);
+                return result != null ? (String) result : "";
+            } catch (Throwable t) {
+                HookUtil.checkFatal(t);
+                if (errorLogger != null) {
+                    errorLogger.accept("LuckPerms: failed to resolve " + (prefix ? "prefix" : "suffix") + " for " + targetUuid + ": " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                }
                 return "";
             }
+        }
+    }
+
+    /**
+     * Backward-compatible alias for ReflectionMetaResolver.
+     */
+    public static final class ReflectionPrefixResolver implements BiFunction<Player, UUID, String> {
+        private final ReflectionMetaResolver delegate;
+
+        public ReflectionPrefixResolver() {
+            this(null);
+        }
+
+        public ReflectionPrefixResolver(Consumer<String> errorLogger) {
+            this.delegate = new ReflectionMetaResolver(errorLogger);
+        }
+
+        public String apply(UUID uuid) {
+            return delegate.resolvePrefix(null, uuid);
+        }
+
+        @Override
+        public String apply(Player player, UUID uuid) {
+            return delegate.resolvePrefix(player, uuid);
         }
     }
 }

@@ -202,4 +202,82 @@ class RelayMessageFormatterTest {
                 "");
         assertEquals("[SMP] {server}: test", maliciousPlayer);
     }
+
+    @Test
+    void formatsSuffixNicknameAndWorldPlaceholdersInDiscord() {
+        String formatted = RelayMessageFormatter.formatForDiscord(
+                "[{world_alias}] {prefix}{nickname}{suffix}: {message}",
+                "AlexReal",
+                "AlexNick",
+                "Hello world!",
+                "2026-11-20T12:00:00Z",
+                "SMP",
+                "[Admin] ",
+                " [VIP]",
+                "world_nether",
+                "Nether Realm");
+
+        assertEquals("[Nether Realm] \\[Admin\\] AlexNick \\[VIP\\]: Hello world!", formatted);
+    }
+
+    @Test
+    void formatsEmptySuffixAndNicknameFallbacksCleanlyWithoutExtraSpaces() {
+        String formatted = RelayMessageFormatter.formatForDiscord(
+                "{prefix}{nickname}{suffix} ({player}): {message}",
+                "AlexReal",
+                "",
+                "No extras",
+                "2026-11-20T12:00:00Z",
+                "SMP",
+                "",
+                "",
+                "world",
+                "world");
+
+        assertEquals("AlexReal (AlexReal): No extras", formatted);
+    }
+
+    @Test
+    void formatsWebhookUsernameWithNicknameSuffixAndWorld() {
+        String username = RelayMessageFormatter.formatWebhookUsername(
+                "{prefix}{nickname}{suffix}",
+                "AlexReal",
+                "AlexNick",
+                "SMP",
+                "[VIP] ",
+                " [Champion]",
+                "world",
+                "Overworld");
+
+        assertEquals("[VIP] AlexNick [Champion]", username);
+
+        // When nickname, prefix, suffix are empty
+        String emptyUsername = RelayMessageFormatter.formatWebhookUsername(
+                "{prefix}{nickname}{suffix}",
+                "AlexReal",
+                "",
+                "SMP",
+                "",
+                "",
+                "world",
+                "Overworld");
+
+        assertEquals("AlexReal", emptyUsername);
+    }
+
+    @Test
+    void formatsMinecraftRelayWithExtendedPlaceholders() {
+        String minecraft = RelayMessageFormatter.formatForMinecraft(
+                "[{server}] {prefix}{player}{suffix}: {message}",
+                "AlexReal",
+                "AlexDisplay",
+                "alex_discord",
+                "Greetings",
+                "2026-11-20T12:00:00Z",
+                "SMP",
+                "[Discord] ",
+                " [Verified]");
+
+        assertEquals("[SMP] [Discord] AlexReal [Verified]: Greetings", minecraft);
+    }
 }

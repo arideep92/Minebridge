@@ -11,9 +11,11 @@ import com.minebridge.discord.DiscordEventNotifier;
 import com.minebridge.discord.DiscordService;
 import com.minebridge.discord.ReloadResult;
 import com.minebridge.discord.WebhookService;
+import com.minebridge.hook.ChatMetadataService;
 import com.minebridge.hook.LuckPermsHook;
 import com.minebridge.lifecycle.LifecycleManager;
 import com.minebridge.listener.ChatListener;
+import com.minebridge.listener.PaperChatBridge;
 import com.minebridge.listener.PlayerEventListener;
 import com.minebridge.update.UpdateChecker;
 import org.bukkit.command.PluginCommand;
@@ -28,6 +30,7 @@ public final class MineBridgePlugin extends JavaPlugin {
 
     private final long enabledAtNanos = System.nanoTime();
     private ConfigManager configManager;
+    private ChatMetadataService chatMetadataService;
     private LuckPermsHook luckPermsHook;
     private LifecycleManager lifecycleManager;
     private UpdateChecker updateChecker;
@@ -38,11 +41,12 @@ public final class MineBridgePlugin extends JavaPlugin {
         saveDefaultConfig();
 
         configManager = new ConfigManager(this);
-        luckPermsHook = new LuckPermsHook();
+        chatMetadataService = new ChatMetadataService(msg -> getLogger().warning(msg));
+        luckPermsHook = chatMetadataService.getLuckPermsHook();
 
         lifecycleManager = new LifecycleManager(
                 configManager,
-                luckPermsHook,
+                chatMetadataService,
                 cfg -> new DiscordService(this, cfg),
                 cfg -> new WebhookService(cfg),
                 task -> {
@@ -81,7 +85,8 @@ public final class MineBridgePlugin extends JavaPlugin {
         ChatListener chatListener = lifecycleManager.getChatListener();
         DiscordEventNotifier eventNotifier = lifecycleManager.getEventNotifier();
 
-        boolean updateCheckerEnabled = configManager.currentSettings().updateCheckerEnabled();
+        boolean updateCheckerEnabled = configManager.currentSettings() != null
+                && configManager.currentSettings().updateCheckerEnabled();
         updateChecker = new UpdateChecker(
                 getDescription().getVersion(),
                 updateCheckerEnabled,
@@ -110,6 +115,7 @@ public final class MineBridgePlugin extends JavaPlugin {
         }
 
         getServer().getPluginManager().registerEvents(chatListener, this);
+        PaperChatBridge.registerIfAvailable(this, chatListener);
         getServer().getPluginManager().registerEvents(
                 new PlayerEventListener(eventNotifier, configManager, updateChecker), this);
         getServer().getPluginManager().registerEvents(
@@ -134,11 +140,17 @@ public final class MineBridgePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (outgoingTask != null) {
+            outgoingTask.cancel();
+            outgoingTask = null;
+        }
         if (updateChecker != null) {
             updateChecker.shutdown();
+            updateChecker = null;
         }
         if (lifecycleManager != null) {
             lifecycleManager.shutdown();
+            lifecycleManager = null;
         }
     }
 
@@ -199,6 +211,10 @@ public final class MineBridgePlugin extends JavaPlugin {
 
     public LuckPermsHook getLuckPermsHook() {
         return luckPermsHook;
+    }
+
+    public ChatMetadataService getChatMetadataService() {
+        return chatMetadataService;
     }
 
     public UpdateChecker getUpdateChecker() {

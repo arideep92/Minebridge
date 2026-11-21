@@ -5,11 +5,51 @@ versioning: breaking configuration or command changes require a major release;
 backward-compatible features use a minor release; compatible fixes use a patch
 release.
 
-## [Unreleased]
+## [1.3.1] - 2026-11-21
 
 ### Added
 
-- No unreleased changes.
+- **Optional Plugin Compatibility Integrations**: Added modular runtime adapters for popular Bukkit, Spigot, and Paper plugins while maintaining 100% standalone plugin independence without hard compile dependencies or third-party library shading:
+  - **LuckPerms**: Extended native API hook to resolve effective suffixes (`{suffix}`) in addition to prefixes (`{prefix}`) using context-aware query options (`ContextManager.getQueryOptions(Player)`).
+  - **Vault**: Implemented `VaultHook` to resolve `net.milkbowl.vault.chat.Chat` and `net.milkbowl.vault.permission.Permission` providers independently via Bukkit `ServicesManager` as a compatibility fallback when LuckPerms is absent, avoiding duplicate prefixes when both integrations are present.
+  - **EssentialsX**: Implemented `EssentialsHook` to resolve player nicknames (`{nickname}`, `{display_name}`), safely stripping tildes (`~`) and color codes with fallback to Bukkit display name and real username. Private whispers (`/msg`, `/tell`, `/w`), mutes, and commands are strictly kept out of Discord.
+  - **Multiverse-Core**: Implemented `MultiverseHook` to resolve custom world aliases (`{world_alias}`) and world names (`{world}`), with graceful fallback to Bukkit world names.
+  - **PlaceholderAPI**: Implemented `PlaceholderApiHook` allowing arbitrary `%...%` placeholders in configured message templates and webhook identities with fast-path skips when `%` is absent.
+  - **ChatMetadataService**: Created unified metadata facade orchestrating all 5 optional integrations with deterministic precedence (LuckPerms > Vault, EssentialsX > DisplayName > RealName, Multiverse > WorldName).
+- **Cross-World Chat Scoping**: Added configurable cross-world chat modes via `chat.cross-world.mode` (`GLOBAL`, `PER_WORLD`, `FILTERED`) and `chat.cross-world.enabled-worlds`, allowing servers to isolate chat by world while preserving strict privacy filtering against restricted channels.
+- **Strict Identity & Placeholder Security**:
+  - Pinned `{player}` strictly to the real account username (`player.getName()`), preventing nickname spoofing in Discord logs and moderation.
+  - Restricted PlaceholderAPI parsing strictly to trusted administrator-configured templates before message interpolation, making it impossible for players to trigger placeholder injection or leak sensitive server variables.
+- **Strict Global-Chat-Only Synchronization**: Implemented `ChatClassifier` to guarantee that only genuine, public Minecraft global player chat messages are synchronized to Discord.
+- **Paper Modern Asynchronous Chat Support**: Implemented `PaperChatBridge` to dynamically bind to Paper's modern `io.papermc.paper.event.player.AsyncChatEvent` with audience viewer inspection and Adventure component plain text extraction, preserving complete binary compatibility with Spigot servers.
+- **Chat Deduplication**: Implemented `ChatDeduplicator` using a sliding window to prevent duplicate message relay across dual-listener setups, server reload cycles, and Paper's simultaneous modern and legacy chat event dispatches.
+- **Comprehensive Integration Test Suite**: Added extensive test suites (`VaultHookTest`, `EssentialsHookTest`, `MultiverseHookTest`, `PlaceholderApiHookTest`, `ChatMetadataServiceTest`, `CrossWorldChatTest`, `ChatClassifierTest`, `ChatDeduplicatorTest`, and updated `ChatListenerTest`, `RelayMessageFormatterTest`, `LuckPermsHookTest`) covering all individual and combined integrations, fallbacks, cross-world modes, and security invariants.
+- **Clean Prefix and Suffix Message Placement**: Formatted `{prefix}` before usernames and `{suffix}` after usernames cleanly in Discord and Webhooks, avoiding double spaces and empty placeholders when absent.
+- **Startup Configuration Regression Tests**: Added `StartupConfigurationHandlingRegressionTest` covering first startup without `config.yml`, empty bot tokens, rejected tokens, reload recovery, duplicate connection prevention, absent optional dependencies, and first startup in webhook mode.
+
+### Improved
+
+- **Discord & Webhook Lifecycle Handling**: Centralized connection state management with clear status tracking (`INVALID_CONFIGURATION`, `FAILED`, `CONNECTING`, `CONNECTED`, `READY`, `STOPPED`). Successive reloads terminate prior JDA clients and worker threads without leaking duplicate sessions or listeners.
+- **Recovery Through `/mb reload`**: Enabled live recovery from incomplete initial configuration: administrators can populate tokens or webhook URLs post-startup and run `/mb reload` to transition smoothly to active Discord connectivity and activate background schedulers without restarting the Minecraft server.
+- **Optional Integration Error Isolation**: Standardized exception containment across all optional hooks (`LuckPermsHook`, `VaultHook`, `EssentialsHook`, `MultiverseHook`, `PlaceholderApiHook`) via `HookUtil`, preventing any third-party integration failure from crashing or disabling MineBridge while strictly propagating fatal JVM errors (`VirtualMachineError`, `ThreadDeath`).
+- **Private & Restricted Channel Filtering**: Filtered out private messages (`/msg`, `/tell`, `/whisper`, `/w`, `/r`, `/pm`, `/dm`, `-> player`, `[PM] to ...`), faction chat, team chat, party chat, guild chat, staff chat, and local/proximity chat using audience recipient subset analysis, channel tag patterns, channel shortcuts, and player channel metadata.
+- **Fail-Closed Classification**: Chat events with ambiguous recipients, missing senders, or unverified audiences fail closed and are never synchronized.
+- **Cancelled Event Enforcement**: `ChatListener` registered at `EventPriority.MONITOR` with `ignoreCancelled = true`, guaranteeing cancelled chat events are never relayed to Discord.
+- **Plugin & System Message Filtering**: Excluded Citizens NPCs (`NPC` metadata), offline/null senders, `CONSOLE`/`Server` names, empty recipient lists, and command executions.
+- **Prefix Sanitization**: Stripped Minecraft section sign (`§`) and ampersand (`&`) color codes from LuckPerms prefixes before markdown escaping, preventing raw formatting codes in Discord.
+
+### Fixed
+
+- **First-Startup Configuration Handling**: Automatically generate default `config.yml` on first startup if missing; gracefully fall back to bundled defaults without throwing `FileNotFoundException` or failing startup.
+- **Plugin Disabling on Incomplete Discord Configuration**: Eliminated premature `disablePlugin(this)` call when `discord.bot-token` or channel ID is empty or unconfigured. MineBridge now stays fully enabled, retaining Minecraft-side functionality, event handling, and administrative commands (`/mb reload`, `/mb status`) while reporting `INVALID_CONFIGURATION`.
+- **LuckPerms Prefix Synchronization**: Fixed missing player prefix resolution where `ChatListener` previously passed UUID instead of `Player` to `LuckPermsHook`, preventing context-aware prefix retrieval.
+- **Discord Message Spacing**: Fixed leading and extra spaces when players have no LuckPerms prefix or when prefixes lack trailing whitespace.
+- **Candidate Settings Preservation**: Populate `Candidate.settings()` during candidate creation even when configuration errors are detected, preserving mode and settings while safely maintaining `candidate.valid() == false`.
+
+### Compatibility
+
+- Full backward compatibility: Preserves Spigot `AsyncPlayerChatEvent` handling while adding runtime detection and dynamic binding for modern Paper `AsyncChatEvent`.
+- Soft-dependencies on LuckPerms, Vault, EssentialsX, Multiverse-Core, and PlaceholderAPI: Operates strictly as optional soft dependencies (`softdepend` in `plugin.yml`). When any or all integrations are absent, disabled, or unconfigured, MineBridge functions completely standalone with zero errors, zero class-loading issues, and safe fallbacks.
 
 ## [1.3.0] - 2026-11-20
 

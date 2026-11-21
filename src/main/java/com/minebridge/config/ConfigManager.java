@@ -5,7 +5,9 @@ import com.minebridge.achievement.AdvancementCategory;
 import com.minebridge.death.DeathCategory;
 import com.minebridge.discord.DiscordEmbedFactory;
 import com.minebridge.discord.IntegrationMode;
+import com.minebridge.hook.HookUtil;
 import org.bukkit.ChatColor;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -33,11 +35,11 @@ public final class ConfigManager {
             "messages.player-list");
     private static final Map<String, Set<String>> MESSAGE_PLACEHOLDERS = Map.of(
             "messages.minecraft-to-discord",
-            Set.of("player", "message", "timestamp", "server", "prefix"),
+            Set.of("player", "nickname", "display_name", "message", "timestamp", "server", "prefix", "suffix", "world", "world_alias"),
             "messages.discord-to-minecraft",
-            Set.of("player", "display_name", "username", "message", "timestamp"),
-            "messages.player-join", Set.of("player", "timestamp", "server", "prefix"),
-            "messages.player-leave", Set.of("player", "timestamp", "server", "prefix"),
+            Set.of("player", "display_name", "username", "message", "timestamp", "server", "prefix", "suffix"),
+            "messages.player-join", Set.of("player", "nickname", "display_name", "timestamp", "server", "prefix", "suffix", "world", "world_alias"),
+            "messages.player-leave", Set.of("player", "nickname", "display_name", "timestamp", "server", "prefix", "suffix", "world", "world_alias"),
             "messages.server-status", Set.of("online", "max", "server"),
             "messages.player-list", Set.of("online", "max", "players", "server"));
     private static final int MAX_TEMPLATE_LENGTH = 2000;
@@ -46,7 +48,7 @@ public final class ConfigManager {
             "^https://(discord\\.com|discordapp\\.com|canary\\.discord\\.com|ptb\\.discord\\.com)/api/webhooks/([0-9]{17,20})/([A-Za-z0-9_-]+)(?:\\?.*)?$");
     private static final BigInteger MAX_UNSIGNED_64_BIT = new BigInteger("18446744073709551615");
     private static final Map<String, String> SAFE_MESSAGES = Map.of(
-            "messages.minecraft-to-discord", "**{player}**: {message}",
+            "messages.minecraft-to-discord", "{prefix}**{player}**: {message}",
             "messages.discord-to-minecraft", "&9[Discord] &f{player}: {message}",
             "messages.player-join", "🟢 **{player}** joined the server.",
             "messages.player-leave", "🔴 **{player}** left the server.",
@@ -63,17 +65,46 @@ public final class ConfigManager {
             "normal", "&a✦ {player} has made the advancement [{title}]!",
             "challenge", "&6🏆 {player} has completed the challenge [{title}]!");
 
-    private final MineBridgePlugin plugin;
+    private final Plugin plugin;
     private volatile Settings settings = new Settings(
             IntegrationMode.BOT,
             "", "", true, true, SAFE_MESSAGES, true, true,
             defaultDeathSettings(), defaultAchievementSettings(), defaultDiscordEventsSettings(),
-            defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true);
+            defaultWebhookSettings(), "Minecraft Server", defaultEmbedFooterSettings(), true,
+            defaultCrossWorldSettings());
+
+    public enum CrossWorldMode {
+        GLOBAL,
+        PER_WORLD,
+        FILTERED;
+
+        public static CrossWorldMode fromString(String raw) {
+            if (raw == null) {
+                return GLOBAL;
+            }
+            try {
+                return CrossWorldMode.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                return GLOBAL;
+            }
+        }
+    }
+
+    public record CrossWorldSettings(CrossWorldMode mode, Set<String> enabledWorlds) {
+        public CrossWorldSettings {
+            mode = mode == null ? CrossWorldMode.GLOBAL : mode;
+            enabledWorlds = enabledWorlds == null ? Set.of() : Set.copyOf(enabledWorlds);
+        }
+    }
+
+    public static CrossWorldSettings defaultCrossWorldSettings() {
+        return new CrossWorldSettings(CrossWorldMode.GLOBAL, Set.of());
+    }
 
     public record WebhookSettings(String url, String username, String avatarUrl) {
         public WebhookSettings {
             url = url == null ? "" : url.trim();
-            username = username == null || username.isBlank() ? "{player}" : username.trim();
+            username = username == null || username.isBlank() ? "{prefix}{player}" : username.trim();
             avatarUrl = avatarUrl == null ? "" : avatarUrl.trim();
         }
     }
@@ -86,7 +117,7 @@ public final class ConfigManager {
     }
 
     public static WebhookSettings defaultWebhookSettings() {
-        return new WebhookSettings("", "{player}", "");
+        return new WebhookSettings("", "{prefix}{player}", "");
     }
 
     public static EmbedFooterSettings defaultEmbedFooterSettings() {
@@ -108,13 +139,38 @@ public final class ConfigManager {
             WebhookSettings webhook,
             String serverName,
             EmbedFooterSettings embedFooter,
-            boolean updateCheckerEnabled) {
+            boolean updateCheckerEnabled,
+            CrossWorldSettings crossWorld) {
         public Settings {
             mode = mode == null ? IntegrationMode.BOT : mode;
             messages = Map.copyOf(messages);
             webhook = webhook == null ? defaultWebhookSettings() : webhook;
             serverName = serverName == null ? "Minecraft Server" : serverName;
             embedFooter = embedFooter == null ? defaultEmbedFooterSettings() : embedFooter;
+            crossWorld = crossWorld == null ? defaultCrossWorldSettings() : crossWorld;
+        }
+
+        // Convenience constructor preserving backward compatibility for previous 15-arg Settings.
+        public Settings(
+                IntegrationMode mode,
+                String botToken,
+                String channelId,
+                boolean chatEnabled,
+                boolean eventsEnabled,
+                Map<String, String> messages,
+                boolean serverStatusEnabled,
+                boolean playerListEnabled,
+                DeathSettings deathMessages,
+                AchievementSettings achievements,
+                DiscordEventsSettings discordEvents,
+                WebhookSettings webhook,
+                String serverName,
+                EmbedFooterSettings embedFooter,
+                boolean updateCheckerEnabled) {
+            this(mode, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled,
+                    deathMessages, achievements, discordEvents,
+                    webhook, serverName, embedFooter, updateCheckerEnabled, defaultCrossWorldSettings());
         }
 
         // Convenience constructors that preserve backward compatibility by defaulting updateCheckerEnabled to true.
@@ -303,7 +359,7 @@ public final class ConfigManager {
 
     public record Candidate(Settings settings, List<String> errors) {
         public Candidate {
-            errors = List.copyOf(errors);
+            errors = errors == null ? List.of() : List.copyOf(errors);
         }
 
         public boolean valid() {
@@ -311,17 +367,37 @@ public final class ConfigManager {
         }
     }
 
-    public ConfigManager(MineBridgePlugin plugin) {
+    public ConfigManager(Plugin plugin) {
         this.plugin = plugin;
     }
 
+    public ConfigManager(MineBridgePlugin plugin) {
+        this((Plugin) plugin);
+    }
+
     public Candidate loadCandidate() {
+        if (plugin == null || plugin.getDataFolder() == null) {
+            return new Candidate(settings, validationErrors());
+        }
         File configFile = new File(plugin.getDataFolder(), "config.yml");
+        if (!configFile.exists()) {
+            try {
+                plugin.saveDefaultConfig();
+            } catch (Throwable t) {
+                HookUtil.checkFatal(t);
+            }
+        }
         try {
             YamlConfiguration defaults = loadBundledDefaults();
             YamlConfiguration loaded = new YamlConfiguration();
-            loaded.setDefaults(defaults);
-            loaded.load(configFile);
+            if (defaults != null) {
+                loaded.setDefaults(defaults);
+            }
+            if (configFile.exists()) {
+                loaded.load(configFile);
+            } else if (defaults != null) {
+                loaded = defaults;
+            }
             return candidateFrom(loaded, System.getenv("MINEBRIDGE_BOT_TOKEN"));
         } catch (IOException | InvalidConfigurationException | SecurityException exception) {
             return new Candidate(null, List.of(
@@ -332,6 +408,9 @@ public final class ConfigManager {
 
     public Candidate candidateFrom(
             ConfigurationSection configuration, String environmentToken) {
+        if (configuration == null) {
+            return new Candidate(null, List.of("Configuration section is null."));
+        }
         List<String> errors = new ArrayList<>();
         Object modeValue = configuration.get("discord.mode");
         IntegrationMode mode = IntegrationMode.BOT;
@@ -398,29 +477,49 @@ public final class ConfigManager {
                 achievements,
                 discordEvents);
         errors.addAll(validateConfiguration(mode, token, channelId, requireChannelId, webhook));
-        if (errors.isEmpty()) {
-            return new Candidate(new Settings(
-                    mode,
-                    token,
-                    channelId,
-                    chatEnabled,
-                    eventsEnabled,
-                    Map.copyOf(messages),
-                    serverStatusEnabled,
-                    playerListEnabled,
-                    deathMessages,
-                    achievements,
-                    discordEvents,
-                    webhook,
-                    serverName,
-                    embedFooter,
-                    updateCheckerEnabled), List.of());
+
+        boolean chatRelay = chatEnabled == null || chatEnabled;
+        boolean joinLeave = eventsEnabled == null || eventsEnabled;
+        boolean serverStatus = serverStatusEnabled == null || serverStatusEnabled;
+        boolean playerList = playerListEnabled == null || playerListEnabled;
+
+        CrossWorldSettings crossWorld = readCrossWorldSettings(
+                configuration.getConfigurationSection("chat.cross-world"));
+
+        Settings parsedSettings = new Settings(
+                mode,
+                token,
+                channelId,
+                chatRelay,
+                joinLeave,
+                Map.copyOf(messages),
+                serverStatus,
+                playerList,
+                deathMessages,
+                achievements,
+                discordEvents,
+                webhook,
+                serverName,
+                embedFooter,
+                updateCheckerEnabled,
+                crossWorld);
+
+        return new Candidate(parsedSettings, errors.isEmpty() ? List.of() : List.copyOf(errors));
+    }
+
+    private static CrossWorldSettings readCrossWorldSettings(ConfigurationSection section) {
+        if (section == null) {
+            return defaultCrossWorldSettings();
         }
-        return new Candidate(null, errors);
+        String modeStr = section.getString("mode", "GLOBAL");
+        CrossWorldMode mode = CrossWorldMode.fromString(modeStr);
+        List<String> worldsList = section.getStringList("enabled-worlds");
+        Set<String> enabledWorlds = worldsList != null ? Set.copyOf(worldsList) : Set.of();
+        return new CrossWorldSettings(mode, enabledWorlds);
     }
 
     public void commit(Candidate candidate) {
-        if (!candidate.valid()) {
+        if (candidate == null || !candidate.valid() || candidate.settings() == null) {
             throw new IllegalArgumentException("Cannot commit invalid MineBridge configuration.");
         }
         settings = candidate.settings();
@@ -431,11 +530,11 @@ public final class ConfigManager {
     }
 
     public String getBotToken() {
-        return settings.botToken();
+        return settings != null ? settings.botToken() : "";
     }
 
     public String getChannelId() {
-        return settings.channelId();
+        return settings != null ? settings.channelId() : "";
     }
 
     public static String resolveBotToken(String environmentToken, String configuredToken) {
@@ -1166,34 +1265,37 @@ public final class ConfigManager {
     }
 
     public IntegrationMode mode() {
-        return settings.mode();
+        return settings != null ? settings.mode() : IntegrationMode.BOT;
     }
 
     public WebhookSettings webhook() {
-        return settings.webhook();
+        return settings != null ? settings.webhook() : defaultWebhookSettings();
     }
 
     public String serverName() {
-        return settings.serverName();
+        return settings != null ? settings.serverName() : "Minecraft Server";
     }
 
     public EmbedFooterSettings embedFooter() {
-        return settings.embedFooter();
+        return settings != null ? settings.embedFooter() : defaultEmbedFooterSettings();
     }
 
     public boolean chatEnabled() {
-        return settings.chatEnabled();
+        return settings != null && settings.chatEnabled();
     }
 
     public boolean eventsEnabled() {
-        return settings.eventsEnabled();
+        return settings != null && settings.eventsEnabled();
     }
 
     public boolean updateCheckerEnabled() {
-        return settings.updateCheckerEnabled();
+        return settings != null && settings.updateCheckerEnabled();
     }
 
     public String message(String key, String fallback) {
+        if (settings == null || settings.messages() == null) {
+            return fallback;
+        }
         return settings.messages().getOrDefault(key, fallback);
     }
 
@@ -1201,13 +1303,17 @@ public final class ConfigManager {
         return ChatColor.translateAlternateColorCodes('&', text);
     }
 
-    private YamlConfiguration loadBundledDefaults() throws IOException, InvalidConfigurationException {
-        try (InputStream stream = plugin.getResource("config.yml")) {
-            if (stream == null) {
-                throw new IOException("Bundled config.yml is missing.");
-            }
+    public YamlConfiguration loadBundledDefaults() throws IOException, InvalidConfigurationException {
+        InputStream stream = plugin != null ? plugin.getResource("config.yml") : null;
+        if (stream == null) {
+            stream = ConfigManager.class.getResourceAsStream("/config.yml");
+        }
+        if (stream == null) {
+            throw new IOException("Bundled config.yml is missing.");
+        }
+        try (InputStream in = stream) {
             YamlConfiguration defaults = new YamlConfiguration();
-            defaults.load(new InputStreamReader(stream, StandardCharsets.UTF_8));
+            defaults.load(new InputStreamReader(in, StandardCharsets.UTF_8));
             return defaults;
         }
     }

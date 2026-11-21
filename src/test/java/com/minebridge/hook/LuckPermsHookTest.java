@@ -2,8 +2,11 @@ package com.minebridge.hook;
 
 import com.minebridge.discord.RelayMessageFormatter;
 import com.minebridge.listener.ChatListener;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -193,5 +196,189 @@ class LuckPermsHookTest {
         LuckPermsHook defaultHook = new LuckPermsHook();
         assertFalse(defaultHook.isAvailable());
         assertEquals("", defaultHook.getPrefix(TEST_UUID));
+    }
+
+    @Test
+    void playerWithPrefixFormattingInBotAndWebhook() {
+        Player mockPlayer = createMockPlayer("Alex", TEST_UUID, "world");
+        LuckPermsHook hook = new LuckPermsHook(() -> true, (player, uuid) -> "[VIP] ");
+
+        assertEquals("[VIP] ", hook.getPrefix(mockPlayer));
+
+        // BOT mode with default template {prefix}**{player}**: {message}
+        List<String> botSent = new ArrayList<>();
+        ChatListener.relayIfNonBlank(
+                "{prefix}**{player}**: {message}",
+                mockPlayer.getName(),
+                "Hello!",
+                Instant.now().toString(),
+                "Survival",
+                hook.getPrefix(mockPlayer),
+                botSent::add);
+        assertEquals(List.of("\\[VIP\\] **Alex**: Hello!"), botSent);
+
+        // Webhook username formatting
+        String webhookUsername = RelayMessageFormatter.formatWebhookUsername(
+                "{prefix}{player}", mockPlayer.getName(), "Survival", hook.getPrefix(mockPlayer));
+        assertEquals("[VIP] Alex", webhookUsername);
+    }
+
+    @Test
+    void playerWithoutPrefixHasNoEmptyPrefixOrExtraSpaces() {
+        Player mockPlayer = createMockPlayer("Alex", TEST_UUID, "world");
+        LuckPermsHook hook = new LuckPermsHook(() -> true, (player, uuid) -> "");
+
+        assertEquals("", hook.getPrefix(mockPlayer));
+
+        // BOT mode default template must NOT have leading or extra space
+        List<String> botSent = new ArrayList<>();
+        ChatListener.relayIfNonBlank(
+                "{prefix}**{player}**: {message}",
+                mockPlayer.getName(),
+                "Hello!",
+                Instant.now().toString(),
+                "Survival",
+                hook.getPrefix(mockPlayer),
+                botSent::add);
+        assertEquals(List.of("**Alex**: Hello!"), botSent);
+
+        // Webhook username formatting must NOT have leading space
+        String webhookUsername = RelayMessageFormatter.formatWebhookUsername(
+                "{prefix}{player}", mockPlayer.getName(), "Survival", hook.getPrefix(mockPlayer));
+        assertEquals("Alex", webhookUsername);
+    }
+
+    @Test
+    void playerWithContextualPrefixResolvesAccordingToCurrentContext() {
+        Player overworldPlayer = createMockPlayer("Alex", TEST_UUID, "world");
+        Player netherPlayer = createMockPlayer("Alex", TEST_UUID, "world_nether");
+
+        LuckPermsHook hook = new LuckPermsHook(() -> true, (player, uuid) -> {
+            if (player != null && player.getWorld() != null) {
+                if ("world_nether".equals(player.getWorld().getName())) {
+                    return "[Nether Lord] ";
+                } else if ("world".equals(player.getWorld().getName())) {
+                    return "[Overworld] ";
+                }
+            }
+            return "[Default] ";
+        });
+
+        assertEquals("[Overworld] ", hook.getPrefix(overworldPlayer));
+        assertEquals("[Nether Lord] ", hook.getPrefix(netherPlayer));
+
+        List<String> netherSent = new ArrayList<>();
+        ChatListener.relayIfNonBlank(
+                "{prefix}**{player}**: {message}",
+                netherPlayer.getName(),
+                "Nether chat",
+                Instant.now().toString(),
+                "SMP",
+                hook.getPrefix(netherPlayer),
+                netherSent::add);
+        assertEquals(List.of("\\[Nether Lord\\] **Alex**: Nether chat"), netherSent);
+    }
+
+    @Test
+    void playerWithAmpersandColorCodesInPrefixIsSanitized() {
+        Player mockPlayer = createMockPlayer("Alex", TEST_UUID, "world");
+        LuckPermsHook hook = new LuckPermsHook(() -> true, (player, uuid) -> "&c[Admin]&r ");
+
+        assertEquals("&c[Admin]&r ", hook.getPrefix(mockPlayer));
+
+        List<String> botSent = new ArrayList<>();
+        ChatListener.relayIfNonBlank(
+                "{prefix}**{player}**: {message}",
+                mockPlayer.getName(),
+                "I am admin",
+                Instant.now().toString(),
+                "SMP",
+                hook.getPrefix(mockPlayer),
+                botSent::add);
+        assertEquals(List.of("\\[Admin\\] **Alex**: I am admin"), botSent);
+
+        String webhookUser = RelayMessageFormatter.formatWebhookUsername(
+                "{prefix}{player}", mockPlayer.getName(), "SMP", hook.getPrefix(mockPlayer));
+        assertEquals("[Admin] Alex", webhookUser);
+    }
+
+    @Test
+    void luckPermsAvailableWithSuffix() {
+        LuckPermsHook hook = new LuckPermsHook(
+                () -> true,
+                (player, uuid) -> "[VIP] ",
+                (player, uuid) -> " [Master]");
+
+        assertTrue(hook.isAvailable());
+        assertEquals("[VIP] ", hook.getPrefix(TEST_UUID));
+        assertEquals(" [Master]", hook.getSuffix(TEST_UUID));
+    }
+
+    @Test
+    void luckPermsAvailableWithoutSuffix() {
+        LuckPermsHook hookNull = new LuckPermsHook(
+                () -> true,
+                (player, uuid) -> "[VIP] ",
+                (player, uuid) -> null);
+        assertTrue(hookNull.isAvailable());
+        assertEquals("", hookNull.getSuffix(TEST_UUID));
+
+        LuckPermsHook hookEmpty = new LuckPermsHook(
+                () -> true,
+                (player, uuid) -> "[VIP] ",
+                (player, uuid) -> "");
+        assertTrue(hookEmpty.isAvailable());
+        assertEquals("", hookEmpty.getSuffix(TEST_UUID));
+    }
+
+    @Test
+    void playerWithContextualSuffix() {
+        Player mockPlayer = createMockPlayer("Alex", TEST_UUID, "world_nether");
+        LuckPermsHook hook = new LuckPermsHook(
+                () -> true,
+                (player, uuid) -> "",
+                (player, uuid) -> {
+                    if (player != null && player.getWorld() != null && "world_nether".equals(player.getWorld().getName())) {
+                        return " [Hellwalker]";
+                    }
+                    return " [Mortal]";
+                });
+
+        assertEquals(" [Hellwalker]", hook.getSuffix(mockPlayer));
+    }
+
+    @Test
+    void nullOrUnavailableSuffixData() {
+        LuckPermsHook hook = new LuckPermsHook(
+                () -> true,
+                (player, uuid) -> "",
+                (player, uuid) -> {
+                    throw new RuntimeException("API error");
+                });
+
+        assertEquals("", hook.getSuffix((Player) null));
+        assertEquals("", hook.getSuffix((UUID) null));
+        assertEquals("", hook.getSuffix(TEST_UUID));
+    }
+
+    private static Player createMockPlayer(String name, UUID uuid, String worldName) {
+        return (Player) Proxy.newProxyInstance(
+                Player.class.getClassLoader(),
+                new Class<?>[]{Player.class},
+                (proxy, method, args) -> {
+                    String methodName = method.getName();
+                    if ("getName".equals(methodName)) return name;
+                    if ("getUniqueId".equals(methodName)) return uuid;
+                    if ("getWorld".equals(methodName)) {
+                        return (World) Proxy.newProxyInstance(
+                                World.class.getClassLoader(),
+                                new Class<?>[]{World.class},
+                                (wProxy, wMethod, wArgs) -> {
+                                    if ("getName".equals(wMethod.getName())) return worldName;
+                                    return null;
+                                });
+                    }
+                    return null;
+                });
     }
 }
