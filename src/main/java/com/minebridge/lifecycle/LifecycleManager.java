@@ -38,6 +38,7 @@ public final class LifecycleManager {
     private final LongSupplier uptimeSupplier;
 
     private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private final AtomicBoolean serverStartedNotificationSent = new AtomicBoolean(false);
     private volatile DiscordService discordService;
     private volatile WebhookService webhookService;
     private volatile DiscordEventNotifier eventNotifier;
@@ -184,10 +185,35 @@ public final class LifecycleManager {
                 webhookService.start();
                 discordService = null;
                 infoLogger.accept("MineBridge started in WEBHOOK mode.");
+            } else if (initial.settings().mode() == IntegrationMode.HYBRID) {
+                webhookService = webhookServiceFactory.apply(configManager);
+                webhookService.start();
+                discordService = discordServiceFactory.apply(configManager);
+                asyncRunner.accept(() -> discordService.start(result -> {
+                    if (result != null && result.successful()) {
+                        if (initial.settings().hybrid().eventDelivery() == IntegrationMode.BOT) {
+                            if (serverStartedNotificationSent.compareAndSet(false, true)) {
+                                if (eventNotifier != null) {
+                                    eventNotifier.sendServerStart();
+                                }
+                            }
+                        }
+                    }
+                }));
+                botSchedulerStarter.run();
+                infoLogger.accept("MineBridge started in HYBRID mode.");
             } else {
                 discordService = discordServiceFactory.apply(configManager);
                 webhookService = null;
-                asyncRunner.accept(() -> discordService.start());
+                asyncRunner.accept(() -> discordService.start(result -> {
+                    if (result != null && result.successful()) {
+                        if (serverStartedNotificationSent.compareAndSet(false, true)) {
+                            if (eventNotifier != null) {
+                                eventNotifier.sendServerStart();
+                            }
+                        }
+                    }
+                }));
                 botSchedulerStarter.run();
                 infoLogger.accept("MineBridge started in BOT mode.");
             }
@@ -199,6 +225,11 @@ public final class LifecycleManager {
             if (mode == IntegrationMode.WEBHOOK) {
                 webhookService = webhookServiceFactory.apply(configManager);
                 webhookService.markConfigurationInvalid();
+            } else if (mode == IntegrationMode.HYBRID) {
+                webhookService = webhookServiceFactory.apply(configManager);
+                webhookService.markConfigurationInvalid();
+                discordService = discordServiceFactory.apply(configManager);
+                discordService.markConfigurationInvalid();
             } else {
                 discordService = discordServiceFactory.apply(configManager);
                 discordService.markConfigurationInvalid();
@@ -215,6 +246,18 @@ public final class LifecycleManager {
             chatListener = new ChatListener(null, discordService, webhookService, configManager, chatMetadataService);
         } else {
             chatListener.updateServices(discordService, webhookService);
+        }
+
+        if (initial.valid() && initial.settings() != null) {
+            if (initial.settings().mode() == IntegrationMode.WEBHOOK
+                    || (initial.settings().mode() == IntegrationMode.HYBRID
+                            && initial.settings().hybrid().eventDelivery() == IntegrationMode.WEBHOOK)) {
+                if (serverStartedNotificationSent.compareAndSet(false, true)) {
+                    if (eventNotifier != null) {
+                        eventNotifier.sendServerStart();
+                    }
+                }
+            }
         }
     }
 
@@ -246,7 +289,9 @@ public final class LifecycleManager {
         }
 
         IntegrationMode currentMode;
-        if (webhookService != null && discordService == null) {
+        if (webhookService != null && discordService != null) {
+            currentMode = IntegrationMode.HYBRID;
+        } else if (webhookService != null && discordService == null) {
             currentMode = IntegrationMode.WEBHOOK;
         } else if (discordService != null && webhookService == null) {
             currentMode = IntegrationMode.BOT;
@@ -297,6 +342,159 @@ public final class LifecycleManager {
             chatListener.updateServices(null, webhookService);
             if (callback != null) {
                 callback.accept(new ReloadResult(true, "Discord Webhook configuration reloaded successfully."));
+            }
+            return;
+        }
+
+        if (currentMode == IntegrationMode.HYBRID && targetMode == IntegrationMode.HYBRID) {
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
+            if (webhookService == null || webhookService.isStopping()) {
+                webhookService = webhookServiceFactory.apply(configManager);
+            }
+            webhookService.start();
+            botSchedulerStarter.run();
+            if (discordService != null && !discordService.isStopping()) {
+                long requestId = discordService.beginReloadRequest();
+                asyncRunner.accept(() -> discordService.reload(requestId, candidate, result -> {
+                    eventNotifier.updateServices(discordService, webhookService);
+                    chatListener.updateServices(discordService, webhookService);
+                    if (callback != null) {
+                        callback.accept(result);
+                    }
+                }));
+            } else {
+                if (discordService != null) {
+                    discordService.stop();
+                }
+                discordService = discordServiceFactory.apply(configManager);
+                eventNotifier.updateServices(discordService, webhookService);
+                chatListener.updateServices(discordService, webhookService);
+                asyncRunner.accept(() -> discordService.start(result -> {
+                    if (callback != null) {
+                        callback.accept(result);
+                    }
+                }));
+            }
+            return;
+        }
+
+        if (currentMode == IntegrationMode.BOT && targetMode == IntegrationMode.HYBRID) {
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
+            if (webhookService == null || webhookService.isStopping()) {
+                webhookService = webhookServiceFactory.apply(configManager);
+            }
+            webhookService.start();
+            botSchedulerStarter.run();
+            if (discordService != null && !discordService.isStopping()) {
+                long requestId = discordService.beginReloadRequest();
+                asyncRunner.accept(() -> discordService.reload(requestId, candidate, result -> {
+                    eventNotifier.updateServices(discordService, webhookService);
+                    chatListener.updateServices(discordService, webhookService);
+                    infoLogger.accept("Switched integration mode from BOT to HYBRID.");
+                    if (callback != null) {
+                        callback.accept(new ReloadResult(result != null && result.successful(), "Switched integration mode from BOT to HYBRID."));
+                    }
+                }));
+            } else {
+                if (discordService != null) {
+                    discordService.stop();
+                }
+                discordService = discordServiceFactory.apply(configManager);
+                eventNotifier.updateServices(discordService, webhookService);
+                chatListener.updateServices(discordService, webhookService);
+                infoLogger.accept("Switched integration mode from BOT to HYBRID.");
+                asyncRunner.accept(() -> discordService.start(result -> {
+                    if (callback != null) {
+                        callback.accept(new ReloadResult(result != null && result.successful(), "Switched integration mode from BOT to HYBRID."));
+                    }
+                }));
+            }
+            return;
+        }
+
+        if (currentMode == IntegrationMode.WEBHOOK && targetMode == IntegrationMode.HYBRID) {
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
+            if (webhookService == null || webhookService.isStopping()) {
+                webhookService = webhookServiceFactory.apply(configManager);
+            }
+            webhookService.start();
+            if (discordService != null) {
+                discordService.stop();
+                discordService = null;
+            }
+            discordService = discordServiceFactory.apply(configManager);
+            eventNotifier.updateServices(discordService, webhookService);
+            chatListener.updateServices(discordService, webhookService);
+            botSchedulerStarter.run();
+            infoLogger.accept("Switched integration mode from WEBHOOK to HYBRID.");
+            asyncRunner.accept(() -> discordService.start(result -> {
+                if (callback != null) {
+                    callback.accept(new ReloadResult(result != null && result.successful(), "Switched integration mode from WEBHOOK to HYBRID."));
+                }
+            }));
+            return;
+        }
+
+        if (currentMode == IntegrationMode.HYBRID && targetMode == IntegrationMode.BOT) {
+            if (webhookService != null) {
+                webhookService.stop();
+                webhookService = null;
+            }
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
+            botSchedulerStarter.run();
+            if (discordService != null && !discordService.isStopping()) {
+                long requestId = discordService.beginReloadRequest();
+                asyncRunner.accept(() -> discordService.reload(requestId, candidate, result -> {
+                    eventNotifier.updateServices(discordService, null);
+                    chatListener.updateServices(discordService, null);
+                    infoLogger.accept("Switched integration mode from HYBRID to BOT.");
+                    if (callback != null) {
+                        callback.accept(new ReloadResult(result != null && result.successful(), "Switched integration mode from HYBRID to BOT."));
+                    }
+                }));
+            } else {
+                if (discordService != null) {
+                    discordService.stop();
+                }
+                discordService = discordServiceFactory.apply(configManager);
+                eventNotifier.updateServices(discordService, null);
+                chatListener.updateServices(discordService, null);
+                infoLogger.accept("Switched integration mode from HYBRID to BOT.");
+                asyncRunner.accept(() -> discordService.start(result -> {
+                    if (callback != null) {
+                        callback.accept(new ReloadResult(result != null && result.successful(), "Switched integration mode from HYBRID to BOT."));
+                    }
+                }));
+            }
+            return;
+        }
+
+        if (currentMode == IntegrationMode.HYBRID && targetMode == IntegrationMode.WEBHOOK) {
+            botSchedulerCanceler.run();
+            if (discordService != null) {
+                discordService.stop();
+                discordService = null;
+            }
+            if (configManager != null) {
+                configManager.commit(candidate);
+            }
+            if (webhookService == null || webhookService.isStopping()) {
+                webhookService = webhookServiceFactory.apply(configManager);
+            }
+            webhookService.start();
+            eventNotifier.updateServices(null, webhookService);
+            chatListener.updateServices(null, webhookService);
+            infoLogger.accept("Switched integration mode from HYBRID to WEBHOOK.");
+            if (callback != null) {
+                callback.accept(new ReloadResult(true, "Switched integration mode from HYBRID to WEBHOOK."));
             }
             return;
         }
@@ -355,6 +553,10 @@ public final class LifecycleManager {
             return;
         }
 
+        if (eventNotifier != null) {
+            eventNotifier.sendServerStop();
+        }
+
         botSchedulerCanceler.run();
 
         if (discordService != null) {
@@ -371,6 +573,9 @@ public final class LifecycleManager {
         }
         if (chatListener != null) {
             chatListener.updateServices(null, null);
+            if (chatListener.getSkinAvatarService() != null) {
+                chatListener.getSkinAvatarService().clear();
+            }
         }
 
         infoLogger.accept("MineBridge integration stopped.");
@@ -391,7 +596,33 @@ public final class LifecycleManager {
         boolean chatEnabled = configManager != null && configManager.chatEnabled();
         boolean eventsEnabled = configManager != null && configManager.eventsEnabled();
 
-        if (mode == IntegrationMode.WEBHOOK) {
+        if (mode == IntegrationMode.HYBRID) {
+            MineBridgeStatus botStatus = discordService != null ? discordService.getStatus(uptime) : null;
+            MineBridgeStatus webStatus = webhookService != null ? webhookService.getStatus(uptime, chatEnabled, eventsEnabled, luckPermsAvailable) : null;
+
+            String botState = botStatus != null ? botStatus.discordState() : "NOT_STARTED";
+            boolean channelAvailable = botStatus != null && botStatus.channelAvailable();
+            String webhookState = webStatus != null ? webStatus.discordState() : "NOT_STARTED";
+            boolean webhookValid = webStatus != null && webStatus.channelAvailable();
+
+            int queueSize = (webStatus != null ? webStatus.outgoingQueueSize() : 0) + (botStatus != null ? botStatus.outgoingQueueSize() : 0);
+            int queueCap = webStatus != null ? webStatus.outgoingQueueCapacity() : (botStatus != null ? botStatus.outgoingQueueCapacity() : 100);
+            long queueDropped = (webStatus != null ? webStatus.outgoingDropped() : 0L) + (botStatus != null ? botStatus.outgoingDropped() : 0L);
+
+            return new MineBridgeStatus(
+                    IntegrationMode.HYBRID,
+                    botState,
+                    channelAvailable,
+                    queueSize,
+                    queueCap,
+                    uptime,
+                    chatEnabled,
+                    eventsEnabled,
+                    queueDropped,
+                    luckPermsAvailable,
+                    webhookState,
+                    webhookValid);
+        } else if (mode == IntegrationMode.WEBHOOK) {
             if (webhookService != null) {
                 return webhookService.getStatus(
                         uptime,

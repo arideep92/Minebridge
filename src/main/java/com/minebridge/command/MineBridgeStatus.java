@@ -15,7 +15,35 @@ public record MineBridgeStatus(
         boolean chatRelayEnabled,
         boolean joinLeaveNotificationsEnabled,
         long outgoingDropped,
-        boolean luckPermsAvailable) {
+        boolean luckPermsAvailable,
+        String webhookState,
+        boolean webhookDestinationValid) {
+
+    public MineBridgeStatus(
+            IntegrationMode mode,
+            String discordState,
+            boolean channelAvailable,
+            int outgoingQueueSize,
+            int outgoingQueueCapacity,
+            long uptimeMillis,
+            boolean chatRelayEnabled,
+            boolean joinLeaveNotificationsEnabled,
+            long outgoingDropped,
+            boolean luckPermsAvailable) {
+        this(
+                mode,
+                discordState,
+                channelAvailable,
+                outgoingQueueSize,
+                outgoingQueueCapacity,
+                uptimeMillis,
+                chatRelayEnabled,
+                joinLeaveNotificationsEnabled,
+                outgoingDropped,
+                luckPermsAvailable,
+                mode == IntegrationMode.WEBHOOK ? discordState : "NOT_CONFIGURED",
+                mode == IntegrationMode.WEBHOOK && channelAvailable);
+    }
 
     public MineBridgeStatus(
             String discordState,
@@ -68,6 +96,13 @@ public record MineBridgeStatus(
             lines.add("§7Webhook status: " + colorForWebhook(discordState) + discordState);
             lines.add("§7Webhook destination: "
                     + (channelAvailable ? "§aValid" : "§cInvalid / Unconfigured"));
+        } else if (mode == IntegrationMode.HYBRID) {
+            lines.add("§7Discord bot: " + colorForConnection(discordState) + discordState);
+            lines.add("§7Configured channel: "
+                    + (channelAvailable ? "§aAvailable" : "§cUnavailable"));
+            lines.add("§7Webhook status: " + colorForWebhook(webhookState) + webhookState);
+            lines.add("§7Webhook destination: "
+                    + (webhookDestinationValid ? "§aValid" : "§cInvalid / Unconfigured"));
         } else {
             lines.add("§7Discord: " + colorForConnection(discordState) + discordState);
             lines.add("§7Configured channel: "

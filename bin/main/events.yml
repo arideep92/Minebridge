@@ -1,0 +1,83 @@
+# ==============================================================================
+# MineBridge — Event Notifications & Channel Routing (v1.4.0)
+# Documentation: https://github.com/aridrochatterjee/MineBridge
+# ==============================================================================
+# Configure Discord embeds, categories, and channel overrides for game events.
+# Leave 'channel-id' blank to use the default 'discord.channel-id' from config.yml.
+# ==============================================================================
+
+player-events:
+  enabled: true
+  channel-id: ""
+  join: true
+  leave: true
+  first-join: true
+  embeds:
+    enabled: true
+
+deaths:
+  enabled: true
+
+  # Minecraft in-game death broadcast settings
+  minecraft:
+    enabled: true
+    broadcast: true
+
+  # Discord death announcement settings
+  discord:
+    enabled: true
+    channel-id: ""
+    embed: true
+    title: "☠ Player death"
+    description: "{message}\nCategory: {category}\nCause: {cause}"
+    color: "#D32F2F"
+
+  # Toggle death notifications by category
+  categories:
+    player-kill: true
+    mob-kill: true
+    fall: true
+    lava: true
+    fire: true
+    drowning: true
+    void: true
+    explosion: true
+    environmental: true
+    other: true
+
+advancements:
+  enabled: true
+
+  # Minecraft in-game advancement announcement settings
+  minecraft:
+    enabled: true
+
+  # Discord advancement announcement settings
+  discord:
+    enabled: true
+    channel-id: ""
+    title: "ADVANCEMENT UNLOCKED"
+    description: "{player} has unlocked {title}.\n{description}"
+    challenge-title: "CHALLENGE COMPLETED"
+    challenge-description: "{player} has completed {title}!\n{description}"
+    color: "#2196F3"
+
+  # Challenge completion toggle
+  challenges:
+    enabled: true
+
+  # Toggle announcements by advancement category
+  categories:
+    story: true
+    nether: true
+    end: true
+    adventure: true
+    husbandry: true
+    other: true
+
+server-events:
+  # Send server online / offline notifications to Discord (disabled by default)
+  enabled: false
+  channel-id: ""
+  start: true
+  stop: true

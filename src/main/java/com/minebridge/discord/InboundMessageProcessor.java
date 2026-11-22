@@ -33,7 +33,18 @@ final class InboundMessageProcessor<T> {
             String displayName,
             String username,
             String content,
-            String timestamp) {
+            String timestamp,
+            String channel,
+            String nickname) {
+        ChatMessage(
+                String template,
+                String player,
+                String displayName,
+                String username,
+                String content,
+                String timestamp) {
+            this(template, player, displayName, username, content, timestamp, "", displayName);
+        }
     }
 
     private final Object lock = new Object();

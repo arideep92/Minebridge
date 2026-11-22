@@ -4,7 +4,8 @@ import java.util.Locale;
 
 public enum IntegrationMode {
     BOT,
-    WEBHOOK;
+    WEBHOOK,
+    HYBRID;
 
     public static IntegrationMode fromString(String value) {
         return fromString(value, BOT);

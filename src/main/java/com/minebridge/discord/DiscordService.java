@@ -851,13 +851,24 @@ public final class DiscordService {
             return;
         }
         try {
+            ConfigManager.DiscordChatFormattingSettings discordFormatting =
+                    config != null && config.currentSettings() != null && config.currentSettings().chatFormatting() != null
+                            ? config.currentSettings().chatFormatting().discordToMinecraft()
+                            : ConfigManager.defaultDiscordChatFormattingSettings();
+
             String formatted = RelayMessageFormatter.formatForMinecraft(
-                    config.color(message.template()),
+                    config != null ? config.color(message.template()) : message.template(),
                     message.player(),
                     message.displayName(),
                     message.username(),
+                    message.nickname(),
                     message.content(),
-                    message.timestamp());
+                    message.timestamp(),
+                    config != null && config.currentSettings() != null ? config.currentSettings().serverName() : "",
+                    "",
+                    "",
+                    message.channel(),
+                    discordFormatting.toOptions());
             if (plugin.isEnabled()) {
                 plugin.getServer().broadcastMessage(formatted);
             }

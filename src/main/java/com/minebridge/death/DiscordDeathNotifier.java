@@ -1,7 +1,6 @@
 package com.minebridge.death;
 
 import com.minebridge.config.ConfigManager.DeathSettings;
-import com.minebridge.config.ConfigManager;
 import com.minebridge.discord.DiscordEmbedFactory;
 import com.minebridge.discord.DiscordEventNotifier;
 
@@ -20,10 +19,16 @@ public final class DiscordDeathNotifier {
             String message) {
         String titleTemplate = settings.embedTitle() != null && !settings.embedTitle().isBlank()
                 ? settings.embedTitle()
-                : "☠ Player death";
+                : "DEATH";
         String title = DeathMessageFormatter.formatDiscord(titleTemplate, context, message);
+        String descTemplate = settings.embedDescription() != null && !settings.embedDescription().isBlank()
+                ? settings.embedDescription()
+                : "{message}";
+        if ("{message}\nCategory: {category}\nCause: {cause}".equals(descTemplate)) {
+            descTemplate = "{message}";
+        }
         String description = DeathMessageFormatter.formatDiscord(
-                settings.embedDescription(), context, message);
+                descTemplate, context, message);
         var embed = DiscordEmbedFactory.death(
                 title,
                 description,

@@ -55,15 +55,10 @@ class AdvancementMessageFormatterTest {
                 0x43A047);
 
         assertEquals("✦ Advancement unlocked", embed.getTitle());
-        assertEquals("Mine stone with your new pickaxe", embed.getDescription());
+        assertEquals("Stone Age", embed.getDescription());
+        assertEquals("Aridro", embed.getAuthor().getName());
         assertEquals(0x43A047, embed.getColor().getRGB() & 0xFFFFFF);
-        assertEquals(3, embed.getFields().size());
-        assertEquals("Player", embed.getFields().get(0).getName());
-        assertEquals("Aridro", embed.getFields().get(0).getValue());
-        assertEquals("Story", embed.getFields().get(2).getValue());
-        assertTrue(embed.getFields().stream()
-                .anyMatch(field -> field.getName().equals("Category")
-                        && field.getValue().equals("Story")));
+        assertTrue(embed.getFields().isEmpty(), "Minimalistic advancement embed should have no redundant fields");
 
         AdvancementContext challenge = new AdvancementContext(
                 "Aridro", "Cover Me in Debris", "", AdvancementCategory.NETHER, true);
@@ -73,6 +68,8 @@ class AdvancementMessageFormatterTest {
                 challenge,
                 0x43A047);
         assertEquals("🏆 Challenge complete", challengeEmbed.getTitle());
-        assertEquals("Challenge", challengeEmbed.getFields().get(3).getValue());
+        assertEquals("Cover Me in Debris", challengeEmbed.getDescription());
+        assertEquals("Aridro", challengeEmbed.getAuthor().getName());
+        assertTrue(challengeEmbed.getFields().isEmpty());
     }
 }
