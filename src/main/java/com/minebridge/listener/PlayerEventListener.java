@@ -48,10 +48,18 @@ public final class PlayerEventListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         var player = event.getPlayer();
         if (updateChecker != null && updateChecker.hasCachedUpdate()) {
-            updateChecker.notifyIfAdmin(player, updateChecker.getCachedResult());
+            if (config == null || (config.adminUpdateNotificationEnabled() && config.adminUpdateNotificationOnJoinEnabled())) {
+                updateChecker.notifyIfAdmin(player, updateChecker.getCachedResult());
+            }
         }
 
+        if (config == null || notifier == null) {
+            return;
+        }
         ConfigManager.Settings current = config.currentSettings();
+        if (current == null) {
+            return;
+        }
         ConfigManager.DiscordEventsSettings settings = current.discordEvents();
         boolean firstJoin = PlayerEventClassifier.isFirstJoin(player.hasPlayedBefore());
         if (!current.eventsEnabled()
@@ -81,7 +89,13 @@ public final class PlayerEventListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        if (config == null || notifier == null) {
+            return;
+        }
         ConfigManager.Settings current = config.currentSettings();
+        if (current == null) {
+            return;
+        }
         ConfigManager.DiscordEventsSettings settings = current.discordEvents();
         var player = event.getPlayer();
         if (!current.eventsEnabled()

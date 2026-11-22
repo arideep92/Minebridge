@@ -60,12 +60,12 @@ class MinimalisticNotificationRedesignTest {
         MessageEmbed join = DiscordEmbedFactory.playerJoined(
                 "Alex", "Alex joined the server.", false, "Survival SMP", "https://example.com/icon.png");
 
-        assertEquals("JOIN", join.getTitle());
+        assertNull(join.getTitle());
         assertNotNull(join.getAuthor());
-        assertEquals("Alex", join.getAuthor().getName());
+        assertEquals("Alex joined the server", join.getAuthor().getName());
         assertEquals("https://mc-heads.net/avatar/Alex/64", join.getAuthor().getIconUrl());
         assertEquals(DiscordEmbedFactory.JOIN_COLOR, join.getColor().getRGB() & 0xFFFFFF);
-        assertNotNull(join.getTimestamp());
+        assertNull(join.getTimestamp());
         assertNull(join.getDescription());
         assertTrue(join.getFields().isEmpty(), "Join embed must not have redundant fields");
         assertEquals("Survival SMP", join.getFooter().getText());
@@ -77,12 +77,12 @@ class MinimalisticNotificationRedesignTest {
         MessageEmbed leave = DiscordEmbedFactory.playerLeft(
                 "Alex", "Alex left the server.", "Survival SMP", null);
 
-        assertEquals("LEAVE", leave.getTitle());
+        assertNull(leave.getTitle());
         assertNotNull(leave.getAuthor());
-        assertEquals("Alex", leave.getAuthor().getName());
+        assertEquals("Alex left the server", leave.getAuthor().getName());
         assertEquals("https://mc-heads.net/avatar/Alex/64", leave.getAuthor().getIconUrl());
         assertEquals(DiscordEmbedFactory.LEAVE_COLOR, leave.getColor().getRGB() & 0xFFFFFF);
-        assertNotNull(leave.getTimestamp());
+        assertNull(leave.getTimestamp());
         assertNull(leave.getDescription());
         assertTrue(leave.getFields().isEmpty(), "Leave embed must not have redundant fields");
         assertEquals("Survival SMP", leave.getFooter().getText());
@@ -93,13 +93,13 @@ class MinimalisticNotificationRedesignTest {
         MessageEmbed firstJoin = DiscordEmbedFactory.playerJoined(
                 "Steve", "Welcome Steve to the server!", true, "Survival SMP", null);
 
-        assertEquals("FIRST JOIN", firstJoin.getTitle());
+        assertNull(firstJoin.getTitle());
         assertNotNull(firstJoin.getAuthor());
-        assertEquals("Steve", firstJoin.getAuthor().getName());
+        assertEquals("Steve joined for the first time!", firstJoin.getAuthor().getName());
         assertEquals("https://mc-heads.net/avatar/Steve/64", firstJoin.getAuthor().getIconUrl());
         assertEquals(DiscordEmbedFactory.FIRST_JOIN_COLOR, firstJoin.getColor().getRGB() & 0xFFFFFF);
         assertEquals("Welcome Steve to the server!", firstJoin.getDescription());
-        assertNotNull(firstJoin.getTimestamp());
+        assertNull(firstJoin.getTimestamp());
         assertTrue(firstJoin.getFields().isEmpty(), "First join embed must not have redundant fields");
     }
 
@@ -109,26 +109,23 @@ class MinimalisticNotificationRedesignTest {
         MessageEmbed pvpDeath = DiscordEmbedFactory.death(
                 "DEATH", "Alex was slain by Zombie", pvp, DiscordEmbedFactory.DEATH_COLOR, "Survival SMP");
 
-        assertEquals("DEATH", pvpDeath.getTitle());
+        assertNull(pvpDeath.getTitle());
         assertEquals("Alex", pvpDeath.getAuthor().getName());
         assertEquals("https://mc-heads.net/avatar/Alex/64", pvpDeath.getAuthor().getIconUrl());
         assertEquals("Alex was slain by Zombie", pvpDeath.getDescription());
         assertEquals(DiscordEmbedFactory.DEATH_COLOR, pvpDeath.getColor().getRGB() & 0xFFFFFF);
-        assertNotNull(pvpDeath.getTimestamp());
-        assertEquals(1, pvpDeath.getFields().size());
-        assertEquals("Killer", pvpDeath.getFields().get(0).getName());
-        assertEquals("Zombie", pvpDeath.getFields().get(0).getValue());
+        assertNull(pvpDeath.getTimestamp());
+        assertTrue(pvpDeath.getFields().isEmpty(), "Compact death embed must omit redundant fields");
 
         // Environmental death without killer
         DeathContext env = new DeathContext("Alex", "", "fall damage", DeathCategory.FALL);
         MessageEmbed envDeath = DiscordEmbedFactory.death(
                 "DEATH", "Alex fell from a high place", env, DiscordEmbedFactory.DEATH_COLOR, "Survival SMP");
 
-        assertEquals(1, envDeath.getFields().size());
-        assertEquals("Cause", envDeath.getFields().get(0).getName());
-        assertEquals("fall damage", envDeath.getFields().get(0).getValue());
-        assertTrue(envDeath.getFields().stream().noneMatch(f -> f.getName().equals("Killer")));
-        assertTrue(envDeath.getFields().stream().noneMatch(f -> f.getName().equals("Victim")));
+        assertNull(envDeath.getTitle());
+        assertEquals("Alex", envDeath.getAuthor().getName());
+        assertEquals("Alex fell from a high place", envDeath.getDescription());
+        assertTrue(envDeath.getFields().isEmpty(), "Compact environmental death embed must omit redundant fields");
     }
 
     @Test
@@ -151,30 +148,32 @@ class MinimalisticNotificationRedesignTest {
         MessageEmbed advEmbed = DiscordEmbedFactory.advancement(
                 context, "ADVANCEMENT", "Protect yourself with armor", 0, "Survival SMP");
 
-        assertEquals("ADVANCEMENT", advEmbed.getTitle());
-        assertEquals("Alex", advEmbed.getAuthor().getName());
+        assertNull(advEmbed.getTitle());
+        assertEquals("Alex has made the advancement [Suit Up]", advEmbed.getAuthor().getName());
         assertEquals("https://mc-heads.net/avatar/Alex/64", advEmbed.getAuthor().getIconUrl());
-        assertEquals("Suit Up", advEmbed.getDescription());
         assertEquals(0x3498DB, advEmbed.getColor().getRGB() & 0xFFFFFF);
         assertTrue(advEmbed.getFields().isEmpty(), "Advancement embed must omit redundant fields");
-        assertNotNull(advEmbed.getTimestamp());
+        assertNull(advEmbed.getTimestamp());
     }
 
     @Test
     void verifiesServerStartAndStopEmbeds() {
         MessageEmbed start = DiscordEmbedFactory.serverStarted("Survival SMP", "https://example.com/icon.png");
-        assertEquals("SERVER ONLINE", start.getTitle());
+        assertNull(start.getTitle());
+        assertEquals("Survival SMP", start.getAuthor().getName());
+        assertEquals("Server is online", start.getDescription());
         assertEquals(DiscordEmbedFactory.SERVER_ONLINE_COLOR, start.getColor().getRGB() & 0xFFFFFF);
-        assertNotNull(start.getTimestamp());
-        assertEquals("Survival SMP", start.getFooter().getText());
-        assertEquals("https://example.com/icon.png", start.getFooter().getIconUrl());
+        assertNull(start.getTimestamp());
+        assertNull(start.getFooter());
         assertTrue(start.getFields().isEmpty());
 
         MessageEmbed stop = DiscordEmbedFactory.serverStopped("Survival SMP", null);
-        assertEquals("SERVER OFFLINE", stop.getTitle());
+        assertNull(stop.getTitle());
+        assertEquals("Survival SMP", stop.getAuthor().getName());
+        assertEquals("Server is offline", stop.getDescription());
         assertEquals(DiscordEmbedFactory.SERVER_OFFLINE_COLOR, stop.getColor().getRGB() & 0xFFFFFF);
-        assertNotNull(stop.getTimestamp());
-        assertEquals("Survival SMP", stop.getFooter().getText());
+        assertNull(stop.getTimestamp());
+        assertNull(stop.getFooter());
         assertTrue(stop.getFields().isEmpty());
     }
 

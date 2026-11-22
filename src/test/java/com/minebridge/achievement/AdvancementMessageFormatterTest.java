@@ -55,8 +55,7 @@ class AdvancementMessageFormatterTest {
                 0x43A047);
 
         assertEquals("✦ Advancement unlocked", embed.getTitle());
-        assertEquals("Stone Age", embed.getDescription());
-        assertEquals("Aridro", embed.getAuthor().getName());
+        assertEquals("Aridro has made the advancement [Stone Age]", embed.getAuthor().getName());
         assertEquals(0x43A047, embed.getColor().getRGB() & 0xFFFFFF);
         assertTrue(embed.getFields().isEmpty(), "Minimalistic advancement embed should have no redundant fields");
 
@@ -68,8 +67,7 @@ class AdvancementMessageFormatterTest {
                 challenge,
                 0x43A047);
         assertEquals("🏆 Challenge complete", challengeEmbed.getTitle());
-        assertEquals("Cover Me in Debris", challengeEmbed.getDescription());
-        assertEquals("Aridro", challengeEmbed.getAuthor().getName());
+        assertEquals("Aridro has completed the challenge [Cover Me in Debris]", challengeEmbed.getAuthor().getName());
         assertTrue(challengeEmbed.getFields().isEmpty());
     }
 }

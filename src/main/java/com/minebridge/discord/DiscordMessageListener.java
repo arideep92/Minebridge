@@ -74,7 +74,7 @@ public final class DiscordMessageListener extends ListenerAdapter {
         String channel = DiscordMessageFilter.sanitizeIncoming(event.getChannel().getName());
 
         String template = settings.messages().getOrDefault(
-                "messages.discord-to-minecraft", "&9[Discord] &f{player}: {message}");
+                "messages.discord-to-minecraft", "&8[&bDiscord&8] &7{player}&8: &f{message}");
 
         discord.receiveIncoming(
                 event.getAuthor().getId(),

@@ -48,8 +48,8 @@ embeds:
     text: ""
     # Global embed footer icon URL
     icon-url: ""
-    # Default footer text when empty
-    default-text: "MineBridge | Minecraft Events"
+    # Default footer text when empty (disabled by default)
+    default-text: ""
 
 integrations:
   luckperms:

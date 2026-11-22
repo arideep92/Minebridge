@@ -179,8 +179,8 @@ class DiscordEventRoutingTest {
         DataArray joinEmbeds = joinJson.getArray("embeds");
         assertEquals(1, joinEmbeds.length());
         DataObject joinFirst = joinEmbeds.getObject(0);
-        assertEquals("JOIN", joinFirst.getString("title"));
-        assertEquals("Steve", joinFirst.getObject("author").getString("name"));
+        assertFalse(joinFirst.hasKey("title"));
+        assertEquals("Steve joined the server", joinFirst.getObject("author").getString("name"));
         assertEquals("Playing on SurvivalSMP", joinFirst.getObject("footer").getString("text"));
         assertEquals("https://example.com/icon.png", joinFirst.getObject("footer").getString("icon_url"));
 
@@ -194,8 +194,8 @@ class DiscordEventRoutingTest {
         assertEquals(2, recordingFactory.recordedBodies.size());
         DataObject leaveJson = DataObject.fromJson(recordingFactory.recordedBodies.get(1));
         DataObject leaveFirst = leaveJson.getArray("embeds").getObject(0);
-        assertEquals("LEAVE", leaveFirst.getString("title"));
-        assertEquals("Steve", leaveFirst.getObject("author").getString("name"));
+        assertFalse(leaveFirst.hasKey("title"));
+        assertEquals("Steve left the server", leaveFirst.getObject("author").getString("name"));
         assertEquals("Playing on SurvivalSMP", leaveFirst.getObject("footer").getString("text"));
 
         // 3. Player Death
@@ -211,7 +211,7 @@ class DiscordEventRoutingTest {
         assertEquals(3, recordingFactory.recordedBodies.size());
         DataObject deathJson = DataObject.fromJson(recordingFactory.recordedBodies.get(2));
         DataObject deathFirst = deathJson.getArray("embeds").getObject(0);
-        assertEquals("DEATH", deathFirst.getString("title"));
+        assertFalse(deathFirst.hasKey("title"));
         assertEquals("Steve", deathFirst.getObject("author").getString("name"));
         assertEquals("Playing on SurvivalSMP", deathFirst.getObject("footer").getString("text"));
 
@@ -230,8 +230,8 @@ class DiscordEventRoutingTest {
         assertEquals(4, recordingFactory.recordedBodies.size());
         DataObject advJson = DataObject.fromJson(recordingFactory.recordedBodies.get(3));
         DataObject advFirst = advJson.getArray("embeds").getObject(0);
-        assertEquals("ADVANCEMENT", advFirst.getString("title"));
-        assertEquals("Steve", advFirst.getObject("author").getString("name"));
+        assertFalse(advFirst.hasKey("title"));
+        assertEquals("Steve has made the advancement [Suit Up]", advFirst.getObject("author").getString("name"));
         assertEquals("Playing on SurvivalSMP", advFirst.getObject("footer").getString("text"));
 
         // 5. Challenge
@@ -255,8 +255,8 @@ class DiscordEventRoutingTest {
         assertEquals(5, recordingFactory.recordedBodies.size());
         DataObject chalJson = DataObject.fromJson(recordingFactory.recordedBodies.get(4));
         DataObject chalFirst = chalJson.getArray("embeds").getObject(0);
-        assertEquals("CHALLENGE", chalFirst.getString("title"));
-        assertEquals("Steve", chalFirst.getObject("author").getString("name"));
+        assertFalse(chalFirst.hasKey("title"));
+        assertEquals("Steve has completed the challenge [How Did We Get Here?]", chalFirst.getObject("author").getString("name"));
         assertEquals("Playing on SurvivalSMP", chalFirst.getObject("footer").getString("text"));
         assertEquals("https://example.com/icon.png", chalFirst.getObject("footer").getString("icon_url"));
     }
@@ -305,7 +305,7 @@ class DiscordEventRoutingTest {
 
         assertEquals(1, recordingFactory.recordedBodies.size());
         DataObject chatJson = DataObject.fromJson(recordingFactory.recordedBodies.get(0));
-        assertEquals("**Alex**: Hello Webhook World!", chatJson.getString("content"));
+        assertEquals("Alex » Hello Webhook World!", chatJson.getString("content"));
         assertEquals("Alex [SMP]", chatJson.getString("username"));
         assertEquals("https://mc-heads.net/avatar/Alex/100", chatJson.getString("avatar_url"));
     }
@@ -361,8 +361,8 @@ class DiscordEventRoutingTest {
                 "",
                 "");
         DiscordEventNotifier notifier2 = new DiscordEventNotifier(null, null, configBlankFooter);
-        // Falls back to discord-events default or legacy footer
-        assertTrue(notifier2.footer().contains("MineBridge"));
+        // When footer is blank, no footer is emitted
+        assertEquals("", notifier2.footer());
         assertEquals("", notifier2.footerIconUrl());
     }
 }

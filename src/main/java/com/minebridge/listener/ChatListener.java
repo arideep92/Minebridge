@@ -220,9 +220,12 @@ public final class ChatListener implements Listener {
                         ? current.chatFormatting().minecraftToDiscord()
                         : ConfigManager.defaultMinecraftChatFormattingSettings();
 
+        boolean isWebhookDelivery = (current != null && (current.mode() == IntegrationMode.WEBHOOK || current.mode() == IntegrationMode.HYBRID));
+        String templateKey = isWebhookDelivery ? "messages.minecraft-to-discord-webhook" : "messages.minecraft-to-discord";
+        String defaultTemplate = isWebhookDelivery ? "{message}" : "{prefix}{player}{suffix} » {message}";
         String template = config != null
-                ? config.message("messages.minecraft-to-discord", "{prefix}**{player}**{suffix}: {message}")
-                : "{prefix}**{player}**{suffix}: {message}";
+                ? config.message(templateKey, defaultTemplate)
+                : defaultTemplate;
         // PlaceholderAPI processes trusted server template only (never user message content)
         template = chatMetadata.applyPlaceholders(player, template);
 

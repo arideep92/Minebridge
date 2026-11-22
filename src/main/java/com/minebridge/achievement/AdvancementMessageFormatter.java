@@ -39,7 +39,7 @@ public final class AdvancementMessageFormatter {
                 context.challenge(),
                 color,
                 com.minebridge.discord.DiscordEmbedFactory.DEFAULT_FOOTER,
-                java.time.Instant.now());
+                null);
     }
 
     private static String replace(

@@ -14,7 +14,7 @@ import java.util.List;
 
 public final class DiscordEmbedFactory {
 
-    public static final String DEFAULT_FOOTER = "MineBridge | Minecraft Events";
+    public static final String DEFAULT_FOOTER = "";
     public static final String DEFAULT_AVATAR_URL = "https://mc-heads.net/avatar/{player}/100";
 
     // Minimalistic, subtle notification colors
@@ -62,20 +62,18 @@ public final class DiscordEmbedFactory {
             String player, String description, boolean firstJoin, String footer, String footerIconUrl) {
         String safePlayer = discordText(player != null && !player.isBlank() ? player : "Player");
         String avatarUrl = playerAvatarUrl(player);
-        String title = firstJoin ? "FIRST JOIN" : "JOIN";
+        String authorName = firstJoin ? safePlayer + " joined for the first time!" : safePlayer + " joined the server";
         int color = firstJoin ? FIRST_JOIN_COLOR : JOIN_COLOR;
 
         EmbedBuilder builder = new EmbedBuilder()
-                .setTitle(title)
-                .setAuthor(safePlayer, null, avatarUrl)
-                .setColor(new Color(color & 0xFFFFFF))
-                .setTimestamp(Instant.now());
+                .setAuthor(authorName, null, avatarUrl)
+                .setColor(new Color(color & 0xFFFFFF));
 
-        if (firstJoin) {
-            String welcome = (description != null && !description.isBlank())
-                    ? limit(safe(description), 2048)
-                    : safePlayer + " joined the server for the first time!";
-            builder.setDescription(welcome);
+        if (firstJoin && description != null && !description.isBlank()
+                && !description.equals(safePlayer + " joined the server.")
+                && !description.equals(safePlayer + " joined for the first time!")
+                && !description.equals(safePlayer + " joined the Minecraft server.")) {
+            builder.setDescription(limit(safe(description), 2048));
         }
 
         applyFooter(builder, footer, footerIconUrl);
@@ -92,10 +90,8 @@ public final class DiscordEmbedFactory {
         String avatarUrl = playerAvatarUrl(player);
 
         EmbedBuilder builder = new EmbedBuilder()
-                .setTitle("LEAVE")
-                .setAuthor(safePlayer, null, avatarUrl)
-                .setColor(new Color(LEAVE_COLOR & 0xFFFFFF))
-                .setTimestamp(Instant.now());
+                .setAuthor(safePlayer + " left the server", null, avatarUrl)
+                .setColor(new Color(LEAVE_COLOR & 0xFFFFFF));
 
         applyFooter(builder, footer, footerIconUrl);
         return builder.build();
@@ -137,23 +133,33 @@ public final class DiscordEmbedFactory {
             Instant timestamp) {
         String safePlayer = discordText(player != null && !player.isBlank() ? player : "Player");
         String avatarUrl = playerAvatarUrl(player);
-        String embedTitle = challenge ? "CHALLENGE" : "ADVANCEMENT";
+        String safeAdv = discordText(advancement != null ? advancement : "");
+        String authorName = challenge
+                ? safePlayer + " has completed the challenge [" + safeAdv + "]"
+                : safePlayer + " has made the advancement [" + safeAdv + "]";
+
+        int embedColor = color != 0 ? color : (challenge ? CHALLENGE_COLOR : ADVANCEMENT_COLOR);
+
+        EmbedBuilder builder = new EmbedBuilder()
+                .setAuthor(authorName, null, avatarUrl)
+                .setColor(new Color(embedColor & 0xFFFFFF));
+
         if (title != null && !title.isBlank()
                 && !title.equalsIgnoreCase("ADVANCEMENT")
                 && !title.equalsIgnoreCase("ADVANCEMENT UNLOCKED")
                 && !title.equalsIgnoreCase("CHALLENGE")
                 && !title.equalsIgnoreCase("CHALLENGE COMPLETED")) {
-            embedTitle = title;
+            builder.setTitle(limit(safe(title), 256));
         }
 
-        int embedColor = color != 0 ? color : (challenge ? CHALLENGE_COLOR : ADVANCEMENT_COLOR);
-
-        EmbedBuilder builder = new EmbedBuilder()
-                .setTitle(limit(safe(embedTitle), 256))
-                .setAuthor(safePlayer, null, avatarUrl)
-                .setDescription(limit(discordText(advancement != null ? advancement : ""), 2048))
-                .setColor(new Color(embedColor & 0xFFFFFF))
-                .setTimestamp(timestamp != null ? timestamp : Instant.now());
+        if (description != null && !description.isBlank()
+                && !description.equals(advancement)
+                && !description.equals("\u200b")
+                && !description.contains("has unlocked")
+                && !description.contains("has completed")
+                && !description.contains("has made the advancement")) {
+            builder.setDescription(limit(discordText(description), 2048));
+        }
 
         applyFooter(builder, footer, footerIconUrl);
         return builder.build();
@@ -210,30 +216,21 @@ public final class DiscordEmbedFactory {
         String victim = context != null && context.victim() != null ? context.victim() : "Player";
         String safeVictim = discordText(victim);
         String avatarUrl = playerAvatarUrl(victim);
-        String embedTitle = (title != null && !title.isBlank()
-                && !title.equalsIgnoreCase("PLAYER DEATH")
-                && !title.equalsIgnoreCase("☠ Player death"))
-                ? title : "DEATH";
         int embedColor = color != 0 ? color : DEATH_COLOR;
 
         EmbedBuilder builder = new EmbedBuilder()
-                .setTitle(limit(safe(embedTitle), 256))
                 .setAuthor(safeVictim, null, avatarUrl)
-                .setColor(new Color(embedColor & 0xFFFFFF))
-                .setTimestamp(Instant.now());
+                .setColor(new Color(embedColor & 0xFFFFFF));
+
+        if (title != null && !title.isBlank()
+                && !title.equalsIgnoreCase("DEATH")
+                && !title.equalsIgnoreCase("PLAYER DEATH")
+                && !title.equalsIgnoreCase("☠ Player death")) {
+            builder.setTitle(limit(safe(title), 256));
+        }
 
         if (description != null && !description.isBlank()) {
             builder.setDescription(limit(safe(description), 2048));
-        }
-
-        if (context != null) {
-            if (context.killer() != null && !context.killer().isBlank()) {
-                builder.addField("Killer", limit(discordText(context.killer()), 512), true);
-            } else if (context.cause() != null && !context.cause().isBlank()
-                    && !context.cause().equalsIgnoreCase("unknown")
-                    && !context.cause().equalsIgnoreCase("other")) {
-                builder.addField("Cause", limit(discordText(context.cause()), 512), true);
-            }
         }
 
         applyFooter(builder, footer, footerIconUrl);
@@ -241,20 +238,22 @@ public final class DiscordEmbedFactory {
     }
 
     public static MessageEmbed serverStarted(String footer, String footerIconUrl) {
+        String serverName = (footer != null && !footer.isBlank() && !DEFAULT_FOOTER.equals(footer) && !"MineBridge | Minecraft Events".equals(footer))
+                ? footer : "Minecraft Server";
         EmbedBuilder builder = new EmbedBuilder()
-                .setTitle("SERVER ONLINE")
-                .setColor(new Color(SERVER_ONLINE_COLOR & 0xFFFFFF))
-                .setTimestamp(Instant.now());
-        applyFooter(builder, footer, footerIconUrl);
+                .setAuthor(serverName, null, (footerIconUrl != null && !footerIconUrl.isBlank()) ? footerIconUrl.trim() : null)
+                .setDescription("Server is online")
+                .setColor(new Color(SERVER_ONLINE_COLOR & 0xFFFFFF));
         return builder.build();
     }
 
     public static MessageEmbed serverStopped(String footer, String footerIconUrl) {
+        String serverName = (footer != null && !footer.isBlank() && !DEFAULT_FOOTER.equals(footer) && !"MineBridge | Minecraft Events".equals(footer))
+                ? footer : "Minecraft Server";
         EmbedBuilder builder = new EmbedBuilder()
-                .setTitle("SERVER OFFLINE")
-                .setColor(new Color(SERVER_OFFLINE_COLOR & 0xFFFFFF))
-                .setTimestamp(Instant.now());
-        applyFooter(builder, footer, footerIconUrl);
+                .setAuthor(serverName, null, (footerIconUrl != null && !footerIconUrl.isBlank()) ? footerIconUrl.trim() : null)
+                .setDescription("Server is offline")
+                .setColor(new Color(SERVER_OFFLINE_COLOR & 0xFFFFFF));
         return builder.build();
     }
 
@@ -283,8 +282,7 @@ public final class DiscordEmbedFactory {
         EmbedBuilder builder = new EmbedBuilder()
                 .setTitle(limit(safe(title), 256))
                 .setDescription(limit(safe(description), 2048))
-                .setColor(new Color(color & 0xFFFFFF))
-                .setTimestamp(timestamp == null ? Instant.now() : timestamp);
+                .setColor(new Color(color & 0xFFFFFF));
         applyFooter(builder, footer, footerIconUrl);
         return builder;
     }
@@ -294,8 +292,10 @@ public final class DiscordEmbedFactory {
     }
 
     private static void applyFooter(EmbedBuilder builder, String footer, String footerIconUrl) {
-        String safeFooter = footer == null || footer.isBlank()
-                ? DEFAULT_FOOTER : limit(safe(footer), 512);
+        if (footer == null || footer.isBlank() || DEFAULT_FOOTER.equals(footer) || "MineBridge | Minecraft Events".equals(footer)) {
+            return;
+        }
+        String safeFooter = limit(safe(footer), 512);
         String safeIcon = footerIconUrl != null ? footerIconUrl.trim() : "";
         if (!safeIcon.isBlank()) {
             builder.setFooter(safeFooter, safeIcon);

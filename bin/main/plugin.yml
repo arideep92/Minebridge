@@ -14,5 +14,5 @@ commands:
 
 permissions:
   minebridge.admin:
-    description: Allows management of MineBridge
+    description: Allows access to MineBridge administrative notifications.
     default: op

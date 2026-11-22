@@ -45,9 +45,24 @@ release.
   - **Webhook Identity & Payload Sanitization**:
     - Webhook username sanitization: enforces 1–80 characters, strips mass mentions (`@everyone`, `@here`), and replaces disallowed Discord system names (such as "clyde").
     - Webhook avatar URL validation: ensures HTTP/HTTPS protocol, enforces 2048-character limit, and filters out malformed URLs.
-  - **Discord Attachments & Inbound Chat Polish**:
-    - When Discord users post attachments (images, files), MineBridge appends clean readable indicators (e.g. `[image.png]`) to the relayed Minecraft chat message.
-    - Expanded template placeholders: `{uuid}` for Minecraft messages/webhooks, `{channel}` and `{nickname}` for Discord messages.
+  - **DiscordSRV-Inspired Notification & Embed Redesign**:
+    - **Compact Author-Style Event Embeds**: Replaced oversized, heavy notification cards with DiscordSRV-style minimal embeds featuring single-line author identity, player skin head avatar, subtle accent colors, and no redundant titles, descriptions, or footers.
+    - **Complete Timestamp & Footer Elimination**: Removed embed timestamps (`setTimestamp()`) and default branding footers (`MineBridge | Minecraft Events`) across all event notifications (JOIN, FIRST JOIN, LEAVE, DEATH, ADVANCEMENT, CHALLENGE, SERVER START, SERVER STOP), eliminating distracting footer timestamps while preserving custom footer overrides when explicitly configured.
+    - **JOIN**: Author line with player skin avatar (`Player joined the server`), subtle emerald green accent (`#43B581`), no redundant title or description.
+    - **FIRST JOIN**: Author line (`Player joined for the first time!`), restrained gold accent (`#FAA61A`), and clean optional welcome text without redundant fields.
+    - **LEAVE**: Author line (`Player left the server`), subtle soft red accent (`#EF5350`), no redundant title or description.
+    - **DEATH**: Concise death message in description with victim head avatar in author line, crimson red accent (`#E74C3C`), completely eliminating redundant `Killer` and `Cause` fields.
+    - **ADVANCEMENT**: Author line (`Player has made the advancement [Title]`) with player skin avatar, category-specific accent color, and no giant cards.
+    - **CHALLENGE**: Clearly distinguished challenge completion (`Player has completed the challenge [Title]`) with challenge gold accent (`#F1C40F`).
+    - **SERVER START / STOP**: Minimal, clean server status embeds with server name and icon in author line and status description (`Server is online` / `Server is offline`).
+    - **Polished Chat Synchronization**: Default Minecraft → Discord chat template styled with clean arrow separator (`{prefix}{player}{suffix} » {message}`) in BOT mode and plain `{message}` in WEBHOOK/HYBRID modes (avoiding duplicated player identity). Discord → Minecraft chat template styled with subtle muted prefix (`&8[&bDiscord&8] &7{player}&8: &f{message}`).
+
+### Fixed
+
+- **Duplicate Minecraft Advancement Announcements**: Removed redundant in-game broadcast in `AdvancementAnnouncementManager`, allowing vanilla Minecraft advancement toasts and chat announcements to display cleanly without duplicated plugin broadcasts.
+- **Literal `{prefix}{player}` in Webhook Usernames**: Fixed placeholder resolution in `WebhookService` and `RelayMessageFormatter` so that default tokens are properly stripped or replaced, preventing literal `{prefix}{player}` strings on Discord.
+- **Unresolved `{uuid}` and `{player}` Tokens in Webhook Avatar URLs**: Sanitized webhook payload building to eliminate literal placeholder leakage in system and embed deliveries.
+- **HYBRID Mode Event Delivery Deduplication**: Verified that all game events strictly follow the configured single delivery path (`hybrid.event-delivery`), preventing duplicate notifications between bot and webhook transports.
 - **HYBRID Mode Integration (`discord.mode: HYBRID`)**:
   - Introduced a third supported integration mode that pairs high-fidelity webhook outbound delivery with real-time gateway bot inbound reception.
   - **Directional Chat Transport**:

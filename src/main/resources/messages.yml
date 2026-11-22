@@ -8,13 +8,17 @@
 # ==============================================================================
 
 chat:
-  # Outgoing Minecraft-to-Discord chat template.
+  # Outgoing Minecraft-to-Discord chat template (BOT mode).
   # Supported: {player}, {nickname}, {display_name}, {message}, {timestamp}, {server}, {prefix}, {suffix}, {world}, {world_alias}, {uuid}
-  minecraft-to-discord: "{prefix}**{player}**{suffix}: {message}"
+  minecraft-to-discord: "{prefix}{player}{suffix} » {message}"
+
+  # Outgoing chat template when sent via Discord Webhook (WEBHOOK and HYBRID modes).
+  # The player identity and skin avatar are already displayed on the webhook itself.
+  minecraft-to-discord-webhook: "{message}"
 
   # Incoming Discord-to-Minecraft chat template (BOT and HYBRID modes).
   # Supported: {player}, {nickname}, {display_name}, {username}, {channel}, {message}, {timestamp}, {server}, {prefix}, {suffix}
-  discord-to-minecraft: "&9[Discord] &f{player}: {message}"
+  discord-to-minecraft: "&8[&bDiscord&8] &7{player}&8: &f{message}"
 
 player:
   # Join message template (for chat and simple alerts).

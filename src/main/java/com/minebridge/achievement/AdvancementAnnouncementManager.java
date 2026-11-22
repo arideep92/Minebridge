@@ -87,10 +87,6 @@ public final class AdvancementAnnouncementManager {
         String template = context.challenge()
                 ? settings.challengeMessageTemplate()
                 : settings.messageTemplate();
-        if (settings.minecraftEnabled()) {
-            plugin.getServer().broadcastMessage(
-                    AdvancementMessageFormatter.formatMinecraft(template, context));
-        }
         if (settings.discordEnabled()) {
             ConfigManager.DiscordEventsSettings eventSettings =
                     currentSettings.discordEvents();
@@ -120,7 +116,7 @@ public final class AdvancementAnnouncementManager {
                         color,
                         notifier.footer(),
                         notifier.footerIconUrl(),
-                        java.time.Instant.now());
+                        null);
                 String channelId = eventSettings.achievementsChannelId().isBlank()
                         ? settings.discordChannelId().isBlank()
                                 ? currentSettings.channelId()

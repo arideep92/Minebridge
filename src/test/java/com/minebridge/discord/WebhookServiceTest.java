@@ -179,15 +179,39 @@ class WebhookServiceTest {
         assertEquals(1, embeds.length());
 
         DataObject embedNode = embeds.getObject(0);
-        assertEquals("JOIN", embedNode.getString("title"));
-        assertEquals("Alex", embedNode.getObject("author").getString("name"));
+        assertFalse(embedNode.hasKey("title"));
+        assertEquals("Alex joined the server", embedNode.getObject("author").getString("name"));
         assertEquals("https://mc-heads.net/avatar/Alex/64", embedNode.getObject("author").getString("icon_url"));
         assertEquals(DiscordEmbedFactory.JOIN_COLOR, embedNode.getInt("color"));
         assertFalse(embedNode.hasKey("fields"));
+        assertFalse(embedNode.hasKey("timestamp"));
 
         DataObject footer = embedNode.getObject("footer");
         assertEquals("MineBridge | SMP", footer.getString("text"));
         assertEquals("https://icon.invalid", footer.getString("icon_url"));
+    }
+
+    @Test
+    void verifiesDefaultWebhookEmbedPayloadHasNoFooterAndNoTimestamp() {
+        MessageEmbed embed = DiscordEmbedFactory.playerJoined(
+                "Alex",
+                "Alex joined the server.",
+                false,
+                null);
+
+        String json = WebhookService.buildPayload(
+                null,
+                "ServerBot",
+                null,
+                List.of(embed),
+                "SMP",
+                new ConfigManager.EmbedFooterSettings("", ""));
+
+        DataObject root = DataObject.fromJson(json);
+        DataObject embedNode = root.getArray("embeds").getObject(0);
+
+        assertFalse(embedNode.hasKey("timestamp"), "Webhook embed payload must not have timestamp");
+        assertFalse(embedNode.hasKey("footer"), "Webhook embed payload must not have default footer");
     }
 
     @Test
