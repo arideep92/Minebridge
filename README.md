@@ -22,7 +22,7 @@ MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for
   - Zero automatic transport failover that risks duplicate messages.
 - **DiscordSRV-Inspired Chat Integration & Webhook Redesign**:
   - **Bidirectional Markdown Translation**: Translates Minecraft formatting codes (`&`, `§`, hex) into Discord Markdown (`**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `||spoiler||`), and translates Discord Markdown into Minecraft chat codes. Raw `§` characters from Discord users are stripped to prevent color injection or rank spoofing.
-  - **Skin Avatar Resolution (`SkinAvatarService`)**: Asynchronous, non-blocking player skin head avatar resolution with UUID support (`{uuid}`) and a bounded in-memory TTL cache (60m TTL, max 2000 entries).
+  - **Skin Avatar Resolution (`SkinAvatarService`)**: Dynamic player skin avatar resolution via Crafatar (`https://crafatar.com/avatars/{uuid}?overlay`) using player UUIDs with a bounded in-memory TTL cache (60m TTL, max 2000 entries) and safe server fallback.
   - **Long Webhook Message Splitting (`WebhookMessageSplitter`)**: Splits messages exceeding 2000 characters along natural line and word boundaries while preserving formatting styles across segment boundaries and preventing broken UTF-16 surrogate pairs / emojis.
   - **Webhook Identity & Payload Sanitization**: Enforces 1–80 char usernames, defuses mass mentions (`@everyone`, `@here`), prevents disallowed names ("clyde"), and validates avatar URLs.
   - **Discord Attachments & Inbound Polish**: Relays readable file upload links (e.g. `[image.png]`) from Discord into Minecraft, with expanded placeholders (`{channel}`, `{nickname}`, `{uuid}`).
@@ -42,7 +42,7 @@ MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for
   - Categorized death announcements (player kills, mob kills, environmental damage, void, explosions) with customizable Discord embeds.
   - Advancement and challenge completion announcements with tier-aware embeds.
 - **Customizable Appearance**:
-  - Dynamic webhook username and avatar URLs (e.g. displaying player heads via `{player}`).
+  - Dynamic Minecraft player skin avatars for Discord webhooks (chat, player joins/leaves, deaths, advancements/challenges) with Crafatar integration.
   - Customizable embed footer text and icon URLs.
   - Server name placeholder `{server}` across templates and footers.
 - **Optional Compatibility Integrations**:
@@ -84,16 +84,16 @@ MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for
 
 ### Download or Build
 
-1. Download the latest `MineBridge-1.4.0.jar` release from [Modrinth](https://modrinth.com/plugin/minebridge) or [GitHub Releases](https://github.com/Aridro/MineBridge/releases).
+1. Download the latest `MineBridge-1.4.1.jar` release from [Modrinth](https://modrinth.com/plugin/minebridge) or [GitHub Releases](https://github.com/arideep92/Minebridge/releases).
 2. Alternatively, compile from source:
    ```sh
    ./gradlew shadowJar
    ```
-   The shaded JAR will be created at `build/libs/MineBridge-1.4.0.jar`.
+   The shaded JAR will be created at `build/libs/MineBridge-1.4.1.jar`.
 
 ### Installation
 
-1. Place `MineBridge-1.4.0.jar` into your server's `plugins/` directory.
+1. Place `MineBridge-1.4.1.jar` into your server's `plugins/` directory.
 2. Start the server. MineBridge will automatically generate the default `plugins/MineBridge/config.yml` on first boot.
 3. Configure **BOT Mode**, **WEBHOOK Mode**, or **HYBRID Mode** as described in the guides below.
 4. Execute `/minebridge reload` (or `/mb reload`) in-game or from console to apply the configuration.
@@ -196,7 +196,7 @@ WEBHOOK mode uses asynchronous HTTP webhooks. No bot application, bot token, or 
      webhook:
        url: "https://discord.com/api/webhooks/123456789012345678/abcdefg_hijk..."
        username: "{prefix}{player}"
-       avatar-url: "https://mc-heads.net/avatar/{player}/100"
+       avatar-url: "https://crafatar.com/avatars/{uuid}?overlay"
    server:
      name: "Survival SMP"
    ```
@@ -236,7 +236,7 @@ HYBRID mode pairs high-fidelity webhook outbound delivery with real-time gateway
      webhook:
        url: "https://discord.com/api/webhooks/123456789012345678/abcdefg_hijk..."
        username: "{prefix}{player}"
-       avatar-url: "https://mc-heads.net/avatar/{player}/100"
+       avatar-url: "https://crafatar.com/avatars/{uuid}?overlay"
      hybrid:
        # Delivery transport for event embeds: WEBHOOK (default) or BOT.
        event-delivery: WEBHOOK
@@ -330,7 +330,7 @@ The following message categories are strictly excluded from Discord synchronizat
 
 ## Modular Configuration Architecture
 
-MineBridge v1.4.0 organizes settings into **four distinct, modular YAML configuration files**, providing a beginner-friendly setup for new servers while offering comprehensive advanced customization:
+MineBridge v1.4.1 organizes settings into **four distinct, modular YAML configuration files**, providing a beginner-friendly setup for new servers while offering comprehensive advanced customization:
 
 ```
 plugins/MineBridge/
@@ -436,7 +436,7 @@ When upgrading an existing server from single-file `config.yml` setups:
   - `discord-to-minecraft`: `format-conversion`, `allow-bold`, `allow-italic`, `allow-underline`, `allow-strikethrough`, `allow-code`, `show-attachments`.
 - **Webhook Customization (`webhook`)**:
   - `username`: Webhook author display name (default: `"{prefix}{player}"`).
-  - `avatar-url`: Webhook author avatar URL (default: `"https://mc-heads.net/avatar/{uuid}/100"`).
+  - `avatar-url`: Webhook author avatar URL (default: `"https://crafatar.com/avatars/{uuid}?overlay"`).
 - **Hybrid Delivery (`hybrid`)**:
   - `event-delivery`: `WEBHOOK` (default) or `BOT`.
 - **Embed Footers (`embeds.footer`)**:

@@ -121,7 +121,7 @@ class StartupBrandingAndUpdateNotificationTest {
         assertFalse(StartupBanner.hasBeenDisplayed());
 
         List<String> loggedLines = new ArrayList<>();
-        boolean firstDisplay = StartupBanner.display(null, loggedLines::add, "1.4.0", "BOT", true);
+        boolean firstDisplay = StartupBanner.display(null, loggedLines::add, "1.4.1", "BOT", true);
 
         assertTrue(firstDisplay, "First display call must return true");
         assertTrue(StartupBanner.hasBeenDisplayed(), "hasBeenDisplayed must be true after display");
@@ -129,7 +129,7 @@ class StartupBrandingAndUpdateNotificationTest {
 
         // Second call must be blocked by the AtomicBoolean guard
         List<String> secondLoggedLines = new ArrayList<>();
-        boolean secondDisplay = StartupBanner.display(null, secondLoggedLines::add, "1.4.0", "BOT", true);
+        boolean secondDisplay = StartupBanner.display(null, secondLoggedLines::add, "1.4.1", "BOT", true);
 
         assertFalse(secondDisplay, "Second display call must return false");
         assertTrue(secondLoggedLines.isEmpty(), "Second display call must emit no lines");
@@ -160,10 +160,10 @@ class StartupBrandingAndUpdateNotificationTest {
                     return null;
                 });
 
-        boolean displayed = StartupBanner.display(serverMock, null, "1.4.0", "WEBHOOK", true);
+        boolean displayed = StartupBanner.display(serverMock, null, "1.4.1", "WEBHOOK", true);
         assertTrue(displayed);
         assertFalse(consoleMessages.isEmpty());
-        assertTrue(consoleMessages.stream().anyMatch(l -> l.contains("MineBridge v1.4.0")));
+        assertTrue(consoleMessages.stream().anyMatch(l -> l.contains("MineBridge v1.4.1")));
         assertTrue(consoleMessages.stream().anyMatch(l -> l.contains("WEBHOOK")));
     }
 
@@ -193,13 +193,13 @@ class StartupBrandingAndUpdateNotificationTest {
                 });
 
         List<String> loggerMessages = new ArrayList<>();
-        boolean displayed = StartupBanner.display(serverMock, loggerMessages::add, "1.4.0", "BOT", true);
+        boolean displayed = StartupBanner.display(serverMock, loggerMessages::add, "1.4.1", "BOT", true);
 
         assertTrue(displayed, "Banner display must succeed");
         assertTrue(StartupBanner.hasBeenDisplayed());
         assertFalse(loggerMessages.isEmpty(), "Logger must receive all banner lines");
         assertTrue(consoleMessages.isEmpty(), "Console sender must NOT be called when logger succeeds");
-        assertTrue(loggerMessages.stream().anyMatch(l -> l.contains("MineBridge v1.4.0")));
+        assertTrue(loggerMessages.stream().anyMatch(l -> l.contains("MineBridge v1.4.1")));
     }
 
     @Test
@@ -232,7 +232,7 @@ class StartupBrandingAndUpdateNotificationTest {
             throw new RuntimeException("Logger error");
         };
 
-        boolean displayed = StartupBanner.display(serverMock, failingLogger, "1.4.0", "HYBRID", true);
+        boolean displayed = StartupBanner.display(serverMock, failingLogger, "1.4.1", "HYBRID", true);
 
         assertTrue(displayed, "Banner display must succeed via fallback");
         assertTrue(StartupBanner.hasBeenDisplayed());
@@ -245,14 +245,14 @@ class StartupBrandingAndUpdateNotificationTest {
     @DisplayName("Banner failure does not set AtomicBoolean guard and allows subsequent retry")
     void bannerFailureDoesNotLockDisplayGuard() {
         // Both logger and server are null
-        boolean failedDisplay = StartupBanner.display((Server) null, (java.util.function.Consumer<String>) null, "1.4.0", "BOT", true);
+        boolean failedDisplay = StartupBanner.display((Server) null, (java.util.function.Consumer<String>) null, "1.4.1", "BOT", true);
 
         assertFalse(failedDisplay, "Display with no output sinks must return false");
         assertFalse(StartupBanner.hasBeenDisplayed(), "DISPLAYED guard must NOT be set to true on failure");
 
         // Subsequent attempt with valid logger succeeds
         List<String> loggerMessages = new ArrayList<>();
-        boolean retryDisplay = StartupBanner.display(loggerMessages::add, "1.4.0", "BOT", true);
+        boolean retryDisplay = StartupBanner.display(loggerMessages::add, "1.4.1", "BOT", true);
 
         assertTrue(retryDisplay, "Retry with valid logger must succeed");
         assertTrue(StartupBanner.hasBeenDisplayed());
@@ -264,7 +264,7 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Banner contains ASCII art, subtitle by Arixx, version, mode and status")
     void bannerContentLines() {
-        List<String> uncolored = StartupBanner.getBannerLines("1.4.0", "HYBRID", true, false);
+        List<String> uncolored = StartupBanner.getBannerLines("1.4.1", "HYBRID", true, false);
 
         // ASCII Art verification
         for (String artLine : StartupBanner.ASCII_ART) {
@@ -275,14 +275,14 @@ class StartupBrandingAndUpdateNotificationTest {
         assertTrue(uncolored.contains(StartupBanner.SUBTITLE), "Banner must contain subtitle: by Arixx");
 
         // Version, mode and status
-        assertTrue(uncolored.contains("MineBridge v1.4.0"), "Banner must contain MineBridge v1.4.0");
+        assertTrue(uncolored.contains("MineBridge v1.4.1"), "Banner must contain MineBridge v1.4.1");
         assertTrue(uncolored.contains("Mode: HYBRID"), "Banner must contain Mode: HYBRID");
         assertTrue(uncolored.contains("Status: Enabled"), "Banner must contain Status: Enabled");
 
-        // Leading 'v' sanitization (prevents 'MineBridge vv1.4.0')
+        // Leading 'v' sanitization (prevents 'MineBridge vv1.4.1')
         List<LeadingV> leadingVCheck = List.of(
-                new LeadingV("v1.4.0", "MineBridge v1.4.0"),
-                new LeadingV("V1.4.0", "MineBridge v1.4.0")
+                new LeadingV("v1.4.1", "MineBridge v1.4.1"),
+                new LeadingV("V1.4.1", "MineBridge v1.4.1")
         );
         for (LeadingV v : leadingVCheck) {
             List<String> lines = StartupBanner.getBannerLines(v.input, "BOT", false, false);
@@ -296,7 +296,7 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Banner colored lines include exact ChatColor accents")
     void bannerColoredFormatting() {
-        List<String> colored = StartupBanner.getBannerLines("1.4.0", "BOT", true, true);
+        List<String> colored = StartupBanner.getBannerLines("1.4.1", "BOT", true, true);
 
         // ASCII art is AQUA
         assertTrue(colored.get(0).startsWith(ChatColor.AQUA.toString()));
@@ -314,7 +314,7 @@ class StartupBrandingAndUpdateNotificationTest {
         assertTrue(colored.stream().anyMatch(l -> l.contains(ChatColor.GREEN.toString()) && l.contains("Enabled")));
 
         // Status has RED when disabled
-        List<String> disabledColored = StartupBanner.getBannerLines("1.4.0", "BOT", false, true);
+        List<String> disabledColored = StartupBanner.getBannerLines("1.4.1", "BOT", false, true);
         assertTrue(disabledColored.stream().anyMatch(l -> l.contains(ChatColor.RED.toString()) && l.contains("Disabled")));
     }
 
@@ -323,32 +323,32 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Console status display for up to date is neutral/green")
     void versionStatusConsoleDisplayUpToDate() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         List<String> logs = new ArrayList<>();
         List<String> warnLogs = new ArrayList<>();
 
-        checker.notifyConsole(UpdateChecker.UpdateResult.upToDate("1.4.0"), logs::add, warnLogs::add);
+        checker.notifyConsole(UpdateChecker.UpdateResult.upToDate("1.4.1"), logs::add, warnLogs::add);
 
         assertEquals(2, logs.size());
         assertTrue(warnLogs.isEmpty(), "Up to date status must not emit warnings");
-        assertEquals("§a[MineBridge] §7Version: §f1.4.0", logs.get(0));
+        assertEquals("§a[MineBridge] §7Version: §f1.4.1", logs.get(0));
         assertEquals("§a[MineBridge] §aUpdate status: Up to date", logs.get(1));
     }
 
     @Test
     @DisplayName("Console status display for update available is yellow/gold warning")
     void versionStatusConsoleDisplayUpdateAvailable() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         List<String> logs = new ArrayList<>();
         List<String> warnLogs = new ArrayList<>();
 
         checker.notifyConsole(
-                UpdateChecker.UpdateResult.available("1.4.0", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0"),
+                UpdateChecker.UpdateResult.available("1.4.1", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0"),
                 logs::add, warnLogs::add);
 
         assertEquals(3, logs.size());
         assertTrue(warnLogs.isEmpty());
-        assertEquals("§6[MineBridge] §eInstalled version: §f1.4.0", logs.get(0));
+        assertEquals("§6[MineBridge] §eInstalled version: §f1.4.1", logs.get(0));
         assertEquals("§6[MineBridge] §eLatest version: §a1.5.0", logs.get(1));
         assertEquals("§6[MineBridge] §eUpdate available! Download the latest release.", logs.get(2));
     }
@@ -356,7 +356,7 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Console status display for failed check is informational and does not report outdated")
     void versionStatusConsoleDisplayFailedCheck() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         List<String> logs = new ArrayList<>();
         List<String> warnLogs = new ArrayList<>();
 
@@ -364,7 +364,7 @@ class StartupBrandingAndUpdateNotificationTest {
 
         assertEquals(2, logs.size());
         assertTrue(warnLogs.isEmpty(), "Failed check must be informational and not alarm admins with warning log level");
-        assertEquals("§7[MineBridge] §7Version: §f1.4.0", logs.get(0));
+        assertEquals("§7[MineBridge] §7Version: §f1.4.1", logs.get(0));
         assertEquals("§e[MineBridge] §7Update check failed: §eHTTP 503", logs.get(1));
     }
 
@@ -373,9 +373,9 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Admin with minebridge.admin receives clickable notification with Spigot components")
     void adminReceivesClickableNotification() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         UpdateChecker.UpdateResult available = UpdateChecker.UpdateResult.available(
-                "1.4.0", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
+                "1.4.1", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
 
         List<BaseComponent> spigotComponents = new ArrayList<>();
         List<String> plainMessages = new ArrayList<>();
@@ -391,7 +391,7 @@ class StartupBrandingAndUpdateNotificationTest {
         assertTrue(spigotComponents.get(0).toLegacyText().contains("An update is available!"));
 
         // Line 2: Version details
-        assertTrue(spigotComponents.get(1).toLegacyText().contains("1.4.0"));
+        assertTrue(spigotComponents.get(1).toLegacyText().contains("1.4.1"));
         assertTrue(spigotComponents.get(1).toLegacyText().contains("1.5.0"));
 
         // Line 3: Download link with ClickEvent and HoverEvent
@@ -420,9 +420,9 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Non-admin does not receive any update notification")
     void nonAdminDoesNotReceiveNotification() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         UpdateChecker.UpdateResult available = UpdateChecker.UpdateResult.available(
-                "1.4.0", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
+                "1.4.1", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
 
         List<BaseComponent> spigotComponents = new ArrayList<>();
         List<String> plainMessages = new ArrayList<>();
@@ -438,9 +438,9 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Admin notification is deduplicated across multiple joins or calls")
     void adminNotificationDeduplication() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         UpdateChecker.UpdateResult available = UpdateChecker.UpdateResult.available(
-                "1.4.0", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
+                "1.4.1", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
 
         List<BaseComponent> spigotComponents = new ArrayList<>();
         List<String> plainMessages = new ArrayList<>();
@@ -461,9 +461,9 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Join listener notifies admin only when enabled and update is cached")
     void joinListenerNotifiesAdminWhenCached() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         UpdateChecker.UpdateResult available = UpdateChecker.UpdateResult.available(
-                "1.4.0", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
+                "1.4.1", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
 
         List<BaseComponent> adminComponents = new ArrayList<>();
         List<String> adminPlain = new ArrayList<>();
@@ -493,9 +493,9 @@ class StartupBrandingAndUpdateNotificationTest {
     @Test
     @DisplayName("Configuration toggles suppress notifications when false")
     void configurationTogglesSuppressNotifications() {
-        UpdateChecker checker = new UpdateChecker("1.4.0", true);
+        UpdateChecker checker = new UpdateChecker("1.4.1", true);
         UpdateChecker.UpdateResult available = UpdateChecker.UpdateResult.available(
-                "1.4.0", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
+                "1.4.1", "1.5.0", "https://modrinth.com/plugin/minebridge/version/1.5.0");
         checker.setCachedResult(available);
 
         ConfigSnapshot baseSnapshot = ConfigSnapshot.defaultSnapshot();

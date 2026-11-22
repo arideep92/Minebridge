@@ -29,7 +29,7 @@ public final class StartupBanner {
     }
 
     public static List<String> getBannerLines(String version, String mode, boolean enabled, boolean colored) {
-        String cleanVersion = version != null && !version.isBlank() ? version : "1.4.0";
+        String cleanVersion = version != null && !version.isBlank() ? version : "1.4.1";
         if (cleanVersion.startsWith("v") || cleanVersion.startsWith("V")) {
             cleanVersion = cleanVersion.substring(1);
         }

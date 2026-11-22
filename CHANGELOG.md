@@ -5,6 +5,32 @@ versioning: breaking configuration or command changes require a major release;
 backward-compatible features use a minor release; compatible fixes use a patch
 release.
 
+## [1.4.1] - 2026-11-22
+
+### Added
+
+- **Dynamic Minecraft Player Avatars for Discord Webhook Notifications**:
+  - **Crafatar Avatar API Integration**: All player-related Discord webhook messages now display the player's authentic skin avatar resolved via Crafatar (`https://crafatar.com/avatars/{uuid}?overlay`) using their Minecraft UUID.
+  - **Universal Event Coverage**:
+    - **Chat Messages**: Dynamically sets the webhook message's `avatar_url` to the chat sender's skin avatar.
+    - **Player Joins**: Displays the joining player's skin head avatar on webhook notifications.
+    - **Player Leaves**: Displays the leaving player's skin head avatar on webhook notifications.
+    - **Death Notifications**: Displays the deceased victim's skin head avatar on webhook notifications.
+    - **Advancements & Challenges**: Displays the player's skin head avatar on webhook notifications.
+  - **Server Notifications & Fallback Behavior**:
+    - Server startup and shutdown notifications retain the configured static server webhook avatar.
+    - If a player UUID is missing or avatar resolution encounters an exception, delivery falls back safely to the server's configured webhook avatar without dropping messages.
+  - **Strict State Isolation**:
+    - Avatar URLs are assigned dynamically per HTTP webhook payload without modifying global webhook configuration or leaking state across consecutive messages.
+  - **Full Backward Compatibility**:
+    - Preserves custom administrator-configured avatar templates in `advanced.yml` and `legacy-config.yml`.
+    - Fully preserves both `BOT` and `WEBHOOK` mode operation.
+
+### Changed
+
+- Updated default `webhook.avatar-url` in `advanced.yml` and `legacy-config.yml` to `"https://crafatar.com/avatars/{uuid}?overlay"`.
+- Enhanced startup ASCII banner routing to reliably appear in server logs (`logs/latest.log`) and server console.
+
 ## [1.4.0] - 2026-11-22
 
 ### Added
