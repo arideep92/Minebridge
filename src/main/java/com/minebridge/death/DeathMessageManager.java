@@ -78,7 +78,8 @@ public final class DeathMessageManager {
                 victim.getName(),
                 killerName,
                 DeathMessageClassifier.describe(damageCause),
-                category);
+                category,
+                victim.getUniqueId());
         String template = settings.messages().getOrDefault(
                 category.key(), settings.messages().getOrDefault("other", "&c☠ {victim} died"));
         String minecraftMessage = DeathMessageFormatter.formatMinecraft(template, context);

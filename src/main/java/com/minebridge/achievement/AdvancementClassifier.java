@@ -3,6 +3,7 @@ package com.minebridge.achievement;
 import org.bukkit.advancement.AdvancementDisplayType;
 
 import java.util.Locale;
+import java.util.UUID;
 
 public final class AdvancementClassifier {
 
@@ -37,11 +38,22 @@ public final class AdvancementClassifier {
             String title,
             String description,
             AdvancementDisplayType displayType) {
+        return createContext(player, null, advancementKey, title, description, displayType);
+    }
+
+    public static AdvancementContext createContext(
+            String player,
+            UUID playerUuid,
+            String advancementKey,
+            String title,
+            String description,
+            AdvancementDisplayType displayType) {
         return new AdvancementContext(
                 player,
                 title,
                 description,
                 classify(advancementKey),
-                isChallenge(displayType));
+                isChallenge(displayType),
+                playerUuid);
     }
 }

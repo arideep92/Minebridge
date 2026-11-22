@@ -8,7 +8,7 @@ discord:
   webhook:
     url: ""
     username: "{prefix}{player}"
-    avatar-url: "https://mc-heads.net/avatar/{uuid}/100"
+    avatar-url: "https://crafatar.com/avatars/{uuid}?overlay"
   hybrid:
     event-delivery: WEBHOOK
   embed:

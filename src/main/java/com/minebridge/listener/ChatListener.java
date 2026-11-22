@@ -197,6 +197,9 @@ public final class ChatListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (event != null && event.getPlayer() != null) {
             skinAvatarService.invalidate(event.getPlayer().getUniqueId());
+            if (webhook != null && webhook.getSkinAvatarService() != null) {
+                webhook.getSkinAvatarService().invalidate(event.getPlayer().getUniqueId());
+            }
         }
     }
 
@@ -247,8 +250,15 @@ public final class ChatListener implements Listener {
                     : SkinAvatarService.DEFAULT_AVATAR_TEMPLATE;
             avatarTemplate = chatMetadata.applyPlaceholders(player, avatarTemplate);
 
-            String resolvedAvatar = skinAvatarService.getAvatarUrl(
-                    player.getUniqueId(), player.getName(), avatarTemplate, server);
+            String resolvedAvatar;
+            if (SkinAvatarService.isDefaultOrCrafatar(avatarTemplate)) {
+                resolvedAvatar = webhook != null
+                        ? webhook.resolvePlayerAvatarUrl(player.getUniqueId())
+                        : skinAvatarService.getPlayerAvatar(player.getUniqueId(), "");
+            } else {
+                resolvedAvatar = skinAvatarService.getAvatarUrl(
+                        player.getUniqueId(), player.getName(), avatarTemplate, server);
+            }
 
             relayIfNonBlank(
                     template,
