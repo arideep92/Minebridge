@@ -3,6 +3,8 @@ package com.minebridge.discord;
 import com.minebridge.config.ConfigManager;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 
+import java.util.UUID;
+
 public final class DiscordEventNotifier {
 
     private volatile DiscordService discord;
@@ -32,6 +34,10 @@ public final class DiscordEventNotifier {
     }
 
     public void send(String channelId, MessageEmbed embed) {
+        send(channelId, embed, (UUID) null);
+    }
+
+    public void send(String channelId, MessageEmbed embed, UUID playerUuid) {
         ConfigManager.Settings current = config.currentSettings();
         ConfigManager.DiscordEventsSettings settings = current.discordEvents();
         if (!settings.enabled() || !settings.embedsEnabled() || embed == null) {
@@ -40,7 +46,11 @@ public final class DiscordEventNotifier {
 
         if (current.mode() == IntegrationMode.WEBHOOK) {
             if (webhook != null) {
-                webhook.sendEmbed(embed);
+                if (playerUuid != null) {
+                    webhook.sendPlayerEmbed(embed, playerUuid);
+                } else {
+                    webhook.sendEmbed(embed);
+                }
             }
         } else if (current.mode() == IntegrationMode.HYBRID) {
             if (current.hybrid().eventDelivery() == IntegrationMode.BOT) {
@@ -49,7 +59,11 @@ public final class DiscordEventNotifier {
                 }
             } else {
                 if (webhook != null) {
-                    webhook.sendEmbed(embed);
+                    if (playerUuid != null) {
+                        webhook.sendPlayerEmbed(embed, playerUuid);
+                    } else {
+                        webhook.sendEmbed(embed);
+                    }
                 }
             }
         } else {

@@ -4,6 +4,8 @@ import com.minebridge.config.ConfigManager.DeathSettings;
 import com.minebridge.discord.DiscordEmbedFactory;
 import com.minebridge.discord.DiscordEventNotifier;
 
+import java.util.UUID;
+
 public final class DiscordDeathNotifier {
 
     private final DiscordEventNotifier notifier;
@@ -38,6 +40,7 @@ public final class DiscordDeathNotifier {
                 settings.embedColor(),
                 notifier.footer(),
                 notifier.footerIconUrl());
-        notifier.send(channelId, embed);
+        UUID victimUuid = context != null ? context.victimUuid() : null;
+        notifier.send(channelId, embed, victimUuid);
     }
 }

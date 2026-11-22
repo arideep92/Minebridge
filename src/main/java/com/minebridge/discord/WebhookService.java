@@ -15,6 +15,7 @@ import okhttp3.Response;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -43,6 +44,7 @@ public final class WebhookService {
     private final AtomicLong outgoingDropped = new AtomicLong(0);
     private final RateLimitedDiagnostics diagnostics =
             new RateLimitedDiagnostics(DEFAULT_DIAGNOSTIC_INTERVAL_NANOS);
+    private final SkinAvatarService skinAvatarService;
 
     private volatile String state = "NOT_STARTED";
     private volatile boolean stopping = false;
@@ -54,14 +56,14 @@ public final class WebhookService {
     }
 
     public WebhookService(ConfigManager config) {
-        this(config, null, null, null);
+        this(config, null, null, null, null);
     }
 
     public WebhookService(
             ConfigManager config,
             Consumer<String> infoLogger,
             Consumer<String> warningLogger) {
-        this(config, null, infoLogger, warningLogger);
+        this(config, null, infoLogger, warningLogger, null);
     }
 
     public WebhookService(
@@ -69,9 +71,19 @@ public final class WebhookService {
             Call.Factory callFactory,
             Consumer<String> infoLogger,
             Consumer<String> warningLogger) {
+        this(config, callFactory, infoLogger, warningLogger, null);
+    }
+
+    public WebhookService(
+            ConfigManager config,
+            Call.Factory callFactory,
+            Consumer<String> infoLogger,
+            Consumer<String> warningLogger,
+            SkinAvatarService skinAvatarService) {
         this.config = config;
         this.infoLogger = infoLogger != null ? infoLogger : ignored -> { };
         this.warningLogger = warningLogger != null ? warningLogger : ignored -> { };
+        this.skinAvatarService = skinAvatarService != null ? skinAvatarService : new SkinAvatarService();
         this.outgoingQueue = new BlockingMessageQueue(DEFAULT_QUEUE_CAPACITY);
 
         if (callFactory == null) {
@@ -207,6 +219,61 @@ public final class WebhookService {
             }
         }
         return allEnqueued;
+    }
+
+    public SkinAvatarService getSkinAvatarService() {
+        return skinAvatarService;
+    }
+
+    public String getFallbackAvatarUrl() {
+        ConfigManager.WebhookSettings webhook = getWebhookSettings();
+        String avatarUrl = webhook != null ? webhook.avatarUrl() : "";
+        if (avatarUrl != null && (avatarUrl.contains("{player}") || avatarUrl.contains("{uuid}"))) {
+            return "";
+        }
+        return sanitizeAvatarUrl(avatarUrl);
+    }
+
+    public String resolvePlayerAvatarUrl(UUID playerUuid) {
+        if (playerUuid == null) {
+            return getFallbackAvatarUrl();
+        }
+        try {
+            ConfigManager.WebhookSettings webhook = getWebhookSettings();
+            String configured = webhook != null ? webhook.avatarUrl() : null;
+            if (configured != null && !configured.isBlank()) {
+                String trimmed = configured.trim();
+                if ("none".equalsIgnoreCase(trimmed) || "disabled".equalsIgnoreCase(trimmed)) {
+                    return "";
+                }
+                if ((trimmed.contains("{player}") || trimmed.contains("{uuid}"))
+                        && !SkinAvatarService.isDefaultOrCrafatar(trimmed)) {
+                    return skinAvatarService.getAvatarUrl(playerUuid, null, trimmed, getServerName());
+                }
+            }
+            return skinAvatarService.getPlayerAvatar(playerUuid, getFallbackAvatarUrl());
+        } catch (Exception e) {
+            return getFallbackAvatarUrl();
+        }
+    }
+
+    public boolean sendPlayer(UUID playerUuid, String username, String content) {
+        String avatarUrl = resolvePlayerAvatarUrl(playerUuid);
+        return send(username, avatarUrl, content);
+    }
+
+    public boolean sendPlayerEmbed(MessageEmbed embed, UUID playerUuid) {
+        ConfigManager.WebhookSettings webhook = getWebhookSettings();
+        String username = webhook != null ? webhook.username() : "{player}";
+        if (username != null && (username.contains("{player}") || username.contains("{prefix}") || username.contains("{suffix}"))) {
+            username = getServerName();
+        }
+        return sendPlayerEmbed(username, embed, playerUuid);
+    }
+
+    public boolean sendPlayerEmbed(String username, MessageEmbed embed, UUID playerUuid) {
+        String avatarUrl = resolvePlayerAvatarUrl(playerUuid);
+        return sendEmbed(username, avatarUrl, embed);
     }
 
     public boolean sendEmbed(MessageEmbed embed) {

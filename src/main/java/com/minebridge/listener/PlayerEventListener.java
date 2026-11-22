@@ -84,7 +84,7 @@ public final class PlayerEventListener implements Listener {
                 player.getName(), description, welcome, notifier.footer(), notifier.footerIconUrl());
         String channelId = settings.playerEventsChannelId().isBlank()
                 ? current.channelId() : settings.playerEventsChannelId();
-        notifier.send(channelId, embed);
+        notifier.send(channelId, embed, player.getUniqueId());
     }
 
     @EventHandler
@@ -116,6 +116,7 @@ public final class PlayerEventListener implements Listener {
                 settings.playerEventsChannelId().isBlank()
                         ? current.channelId() : settings.playerEventsChannelId(),
                 DiscordEmbedFactory.playerLeft(
-                        player.getName(), description, notifier.footer(), notifier.footerIconUrl()));
+                        player.getName(), description, notifier.footer(), notifier.footerIconUrl()),
+                player.getUniqueId());
     }
 }

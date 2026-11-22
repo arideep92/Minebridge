@@ -69,8 +69,10 @@ public final class AdvancementAnnouncementManager {
         if (display == null) {
             return;
         }
+        Player player = event.getPlayer();
         AdvancementContext context = AdvancementClassifier.createContext(
-                event.getPlayer().getName(),
+                player.getName(),
+                player.getUniqueId(),
                 advancement.getKey().toString(),
                 display.getTitle(),
                 display.getDescription(),
@@ -78,7 +80,6 @@ public final class AdvancementAnnouncementManager {
         if (!AdvancementAnnouncementPolicy.enabled(settings, context)) {
             return;
         }
-        Player player = event.getPlayer();
         if (deduplicator.alreadyAnnounced(
                 player.getUniqueId(), advancement.getKey().toString())) {
             return;
@@ -122,7 +123,7 @@ public final class AdvancementAnnouncementManager {
                                 ? currentSettings.channelId()
                                 : settings.discordChannelId()
                         : eventSettings.achievementsChannelId();
-                notifier.send(channelId, embed);
+                notifier.send(channelId, embed, player.getUniqueId());
             }
         }
     }
