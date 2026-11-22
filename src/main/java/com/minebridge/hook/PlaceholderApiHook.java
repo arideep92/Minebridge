@@ -124,22 +124,9 @@ public class PlaceholderApiHook {
                     return;
                 }
 
-                ClassLoader loader = papi.getClass().getClassLoader();
-                Class<?> papiClass = null;
-                try {
-                    papiClass = loader.loadClass("me.clip.placeholderapi.PlaceholderAPI");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> papiClass = HookUtil.loadClass(papi.getClass().getClassLoader(), "me.clip.placeholderapi.PlaceholderAPI");
                 if (papiClass != null) {
-                    try {
-                        setPlaceholdersMethod = papiClass.getMethod("setPlaceholders", Player.class, String.class);
-                    } catch (NoSuchMethodException ignored) {
-                    }
+                    setPlaceholdersMethod = HookUtil.findMethod(papiClass, "setPlaceholders", Player.class, String.class);
                 }
 
                 initialized = true;

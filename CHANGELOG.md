@@ -5,6 +5,31 @@ versioning: breaking configuration or command changes require a major release;
 backward-compatible features use a minor release; compatible fixes use a patch
 release.
 
+## [1.3.2] - 2026-11-22
+
+### Changed
+
+- **Codebase Optimization & Architecture Consolidation**:
+  - Unified sliding-window event and announcement deduplication under `SlidingWindowDeduplicator<K>`, eliminating duplicate monotonic time tracking logic across Discord event, advancement, and chat deduplicators while preserving exact public APIs.
+  - Centralized `{placeholder}` token scanning and replacement into `RelayMessageFormatter.replacePlaceholders(...)` across `ServerInfoFormatter`, `DeathMessageFormatter`, and `AdvancementMessageFormatter`.
+  - Extracted shared public chat classification checks in `ChatClassifier.isPublicChatMessage(...)` between Spigot and Paper modern chat pathways.
+  - Streamlined optional dependency reflection in `HookUtil` (`loadClass` and `findMethod`), reducing repetitive reflection boilerplate across `PlaceholderApiHook`, `MultiverseHook`, `EssentialsHook`, and `LuckPermsHook`.
+  - Consolidated diagnostic and failure formatting between `DiscordService` and `WebhookService` via `DiscordDiagnosticFormatter`.
+  - Centralized hex color reading, channel ID parsing, and subsection validation in `ConfigManager`.
+  - Eliminated dead methods `validateOptionalChannelId` and `readString` in `ConfigManager`.
+  - Optimized webhook username placeholder replacement from 8 sequential string replace allocations to a single-pass scan.
+
+### Fixed
+
+- **Dependency Isolation & Relocation**: Fully relocated bundled dependencies including JDA, Jackson, OkHttp3, Okio, Trove4j, Commons Collections 4, Neovisionaries, Kotlin, and JetBrains/IntelliJ annotations under `com.minebridge.libs.*`, preventing classpath collisions with other Minecraft plugins.
+- **Death Embed Customization**: Corrected `DiscordDeathNotifier` to honor configured `settings.embedTitle()`.
+- **Resource Lifecycle & Concurrency Hardening**:
+  - Cleaned up `UpdateChecker` OkHttpClient dispatcher and connection pool on plugin shutdown.
+  - Dynamically synchronized `update-checker.enabled` upon `/mb reload`.
+  - Hardened lifecycle mode detection and ensured mutual termination of previous service instances during mode switches.
+  - Eliminated unsafe off-thread Bukkit entity lookups during server shutdown.
+  - Protected unowned executors from termination in `UpdateChecker.shutdown()`.
+
 ## [1.3.1] - 2026-11-21
 
 ### Added

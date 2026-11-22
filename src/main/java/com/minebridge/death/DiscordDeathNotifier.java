@@ -18,11 +18,14 @@ public final class DiscordDeathNotifier {
             String channelId,
             DeathContext context,
             String message) {
+        String titleTemplate = settings.embedTitle() != null && !settings.embedTitle().isBlank()
+                ? settings.embedTitle()
+                : "☠ Player death";
+        String title = DeathMessageFormatter.formatDiscord(titleTemplate, context, message);
         String description = DeathMessageFormatter.formatDiscord(
                 settings.embedDescription(), context, message);
         var embed = DiscordEmbedFactory.death(
-                DeathMessageFormatter.formatDiscord(
-                        "PLAYER DEATH", context, message),
+                title,
                 description,
                 context,
                 settings.embedColor(),

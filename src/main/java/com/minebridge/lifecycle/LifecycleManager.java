@@ -236,20 +236,30 @@ public final class LifecycleManager {
                 long req = discordService.beginReloadRequest();
                 discordService.finishReloadRequest(req, "INVALID_CONFIGURATION");
             }
+            if (webhookService != null) {
+                webhookService.markConfigurationInvalid();
+            }
             if (callback != null) {
                 callback.accept(new ReloadResult(false, String.join(" ", errors)));
             }
             return;
         }
 
-        IntegrationMode currentMode = configManager != null && configManager.currentSettings() != null
-                ? configManager.currentSettings().mode()
-                : IntegrationMode.BOT;
+        IntegrationMode currentMode;
+        if (webhookService != null && discordService == null) {
+            currentMode = IntegrationMode.WEBHOOK;
+        } else if (discordService != null && webhookService == null) {
+            currentMode = IntegrationMode.BOT;
+        } else if (configManager != null && configManager.currentSettings() != null) {
+            currentMode = configManager.currentSettings().mode();
+        } else {
+            currentMode = IntegrationMode.BOT;
+        }
         IntegrationMode targetMode = candidate.settings().mode();
 
         if (currentMode == IntegrationMode.BOT && targetMode == IntegrationMode.BOT) {
             botSchedulerStarter.run();
-            if (discordService != null) {
+            if (discordService != null && !discordService.isStopping()) {
                 long requestId = discordService.beginReloadRequest();
                 asyncRunner.accept(() -> discordService.reload(requestId, candidate, result -> {
                     if (callback != null) {
@@ -257,6 +267,9 @@ public final class LifecycleManager {
                     }
                 }));
             } else {
+                if (discordService != null) {
+                    discordService.stop();
+                }
                 if (configManager != null) {
                     configManager.commit(candidate);
                 }
@@ -276,7 +289,7 @@ public final class LifecycleManager {
             if (configManager != null) {
                 configManager.commit(candidate);
             }
-            if (webhookService == null) {
+            if (webhookService == null || webhookService.isStopping()) {
                 webhookService = webhookServiceFactory.apply(configManager);
             }
             webhookService.start();
@@ -293,6 +306,10 @@ public final class LifecycleManager {
             if (discordService != null) {
                 discordService.stop();
                 discordService = null;
+            }
+            if (webhookService != null) {
+                webhookService.stop();
+                webhookService = null;
             }
             if (configManager != null) {
                 configManager.commit(candidate);
@@ -312,6 +329,10 @@ public final class LifecycleManager {
             if (webhookService != null) {
                 webhookService.stop();
                 webhookService = null;
+            }
+            if (discordService != null) {
+                discordService.stop();
+                discordService = null;
             }
             if (configManager != null) {
                 configManager.commit(candidate);

@@ -269,121 +269,58 @@ public class LuckPermsHook {
 
                 ClassLoader loader = lpPlugin.getClass().getClassLoader();
 
-                Class<?> providerClass = null;
-                try {
-                    providerClass = loader.loadClass("net.luckperms.api.LuckPermsProvider");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        providerClass = Class.forName("net.luckperms.api.LuckPermsProvider");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> providerClass = HookUtil.loadClass(loader, "net.luckperms.api.LuckPermsProvider");
                 if (providerClass != null) {
-                    getApiMethod = providerClass.getMethod("get");
+                    getApiMethod = HookUtil.findMethod(providerClass, "get");
                 }
 
-                Class<?> luckPermsClass = null;
-                try {
-                    luckPermsClass = loader.loadClass("net.luckperms.api.LuckPerms");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        luckPermsClass = Class.forName("net.luckperms.api.LuckPerms");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> luckPermsClass = HookUtil.loadClass(loader, "net.luckperms.api.LuckPerms");
                 if (luckPermsClass != null) {
-                    getUserManagerMethod = luckPermsClass.getMethod("getUserManager");
+                    getUserManagerMethod = HookUtil.findMethod(luckPermsClass, "getUserManager");
                 }
 
-                Class<?> userManagerClass = null;
-                try {
-                    userManagerClass = loader.loadClass("net.luckperms.api.model.user.UserManager");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        userManagerClass = Class.forName("net.luckperms.api.model.user.UserManager");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> userManagerClass = HookUtil.loadClass(loader, "net.luckperms.api.model.user.UserManager");
                 if (userManagerClass != null) {
-                    getUserMethod = userManagerClass.getMethod("getUser", UUID.class);
+                    getUserMethod = HookUtil.findMethod(userManagerClass, "getUser", UUID.class);
                 }
 
-                Class<?> userClass = null;
-                try {
-                    userClass = loader.loadClass("net.luckperms.api.model.user.User");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        userClass = Class.forName("net.luckperms.api.model.user.User");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> userClass = HookUtil.loadClass(loader, "net.luckperms.api.model.user.User");
                 if (userClass != null) {
-                    getCachedDataMethod = userClass.getMethod("getCachedData");
+                    getCachedDataMethod = HookUtil.findMethod(userClass, "getCachedData");
                 }
 
-                Class<?> cachedDataManagerClass = null;
-                try {
-                    cachedDataManagerClass = loader.loadClass("net.luckperms.api.cacheddata.CachedDataManager");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        cachedDataManagerClass = Class.forName("net.luckperms.api.cacheddata.CachedDataManager");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> cachedDataManagerClass = HookUtil.loadClass(loader, "net.luckperms.api.cacheddata.CachedDataManager");
                 if (cachedDataManagerClass != null) {
-                    getMetaDataMethod = cachedDataManagerClass.getMethod("getMetaData");
+                    getMetaDataMethod = HookUtil.findMethod(cachedDataManagerClass, "getMetaData");
                 }
 
-                Class<?> cachedMetaDataClass = null;
-                try {
-                    cachedMetaDataClass = loader.loadClass("net.luckperms.api.cacheddata.CachedMetaData");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        cachedMetaDataClass = Class.forName("net.luckperms.api.cacheddata.CachedMetaData");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> cachedMetaDataClass = HookUtil.loadClass(loader, "net.luckperms.api.cacheddata.CachedMetaData");
                 if (cachedMetaDataClass != null) {
-                    getPrefixMethod = cachedMetaDataClass.getMethod("getPrefix");
-                    try {
-                        getSuffixMethod = cachedMetaDataClass.getMethod("getSuffix");
-                    } catch (Throwable ignored) {
-                    }
+                    getPrefixMethod = HookUtil.findMethod(cachedMetaDataClass, "getPrefix");
+                    getSuffixMethod = HookUtil.findMethod(cachedMetaDataClass, "getSuffix");
                 }
 
                 // ContextManager and contextual QueryOptions
                 if (luckPermsClass != null && cachedDataManagerClass != null) {
                     try {
-                        getContextManagerMethod = luckPermsClass.getMethod("getContextManager");
-                        Class<?> contextManagerClass = null;
-                        try {
-                            contextManagerClass = loader.loadClass("net.luckperms.api.context.ContextManager");
-                        } catch (ClassNotFoundException e) {
-                            contextManagerClass = Class.forName("net.luckperms.api.context.ContextManager");
-                        }
-                        for (Method m : contextManagerClass.getMethods()) {
-                            if ("getQueryOptions".equals(m.getName()) && m.getParameterCount() == 1) {
-                                Class<?> paramType = m.getParameterTypes()[0];
-                                if (paramType.getName().contains("User")) {
-                                    getQueryOptionsUserMethod = m;
-                                } else {
-                                    getQueryOptionsPlayerMethod = m;
+                        getContextManagerMethod = HookUtil.findMethod(luckPermsClass, "getContextManager");
+                        Class<?> contextManagerClass = HookUtil.loadClass(loader, "net.luckperms.api.context.ContextManager");
+                        if (contextManagerClass != null) {
+                            for (Method m : contextManagerClass.getMethods()) {
+                                if ("getQueryOptions".equals(m.getName()) && m.getParameterCount() == 1) {
+                                    Class<?> paramType = m.getParameterTypes()[0];
+                                    if (paramType.getName().contains("User")) {
+                                        getQueryOptionsUserMethod = m;
+                                    } else {
+                                        getQueryOptionsPlayerMethod = m;
+                                    }
                                 }
                             }
                         }
-                        Class<?> queryOptionsClass = null;
-                        try {
-                            queryOptionsClass = loader.loadClass("net.luckperms.api.query.QueryOptions");
-                        } catch (ClassNotFoundException e) {
-                            queryOptionsClass = Class.forName("net.luckperms.api.query.QueryOptions");
+                        Class<?> queryOptionsClass = HookUtil.loadClass(loader, "net.luckperms.api.query.QueryOptions");
+                        if (queryOptionsClass != null) {
+                            getMetaDataWithOptionsMethod = HookUtil.findMethod(cachedDataManagerClass, "getMetaData", queryOptionsClass);
                         }
-                        getMetaDataWithOptionsMethod = cachedDataManagerClass.getMethod("getMetaData", queryOptionsClass);
                     } catch (Throwable ignored) {
                     }
                 }

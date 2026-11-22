@@ -12,7 +12,7 @@ public final class ServerInfoFormatter {
     }
 
     public static String formatServerStatus(String template, int online, int max) {
-        return replacePlaceholders(template, Map.of(
+        return RelayMessageFormatter.replacePlaceholders(template, Map.of(
                 "online", Integer.toString(online),
                 "max", Integer.toString(max)));
     }
@@ -24,31 +24,9 @@ public final class ServerInfoFormatter {
                 : playerNames.stream()
                         .map(RelayMessageFormatter::sanitizeText)
                         .collect(Collectors.joining(", "));
-        return replacePlaceholders(template, Map.of(
+        return RelayMessageFormatter.replacePlaceholders(template, Map.of(
                 "online", Integer.toString(online),
                 "max", Integer.toString(max),
                 "players", players));
-    }
-
-    private static String replacePlaceholders(
-            String template, Map<String, String> placeholders) {
-        StringBuilder formatted = new StringBuilder(template.length());
-        for (int index = 0; index < template.length();) {
-            if (template.charAt(index) == '{') {
-                int closingBrace = template.indexOf('}', index + 1);
-                if (closingBrace >= 0) {
-                    String replacement = placeholders.get(
-                            template.substring(index + 1, closingBrace));
-                    if (replacement != null) {
-                        formatted.append(replacement);
-                        index = closingBrace + 1;
-                        continue;
-                    }
-                }
-            }
-            formatted.append(template.charAt(index));
-            index++;
-        }
-        return formatted.toString();
     }
 }

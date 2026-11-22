@@ -37,23 +37,7 @@ public final class DeathMessageFormatter {
                 "cause", safe(context.cause(), escapeDiscordText),
                 "category", safe(context.category().displayName(), escapeDiscordText),
                 "message", message == null ? "" : message);
-        StringBuilder formatted = new StringBuilder(template.length());
-        for (int index = 0; index < template.length();) {
-            if (template.charAt(index) == '{') {
-                int closingBrace = template.indexOf('}', index + 1);
-                if (closingBrace >= 0) {
-                    String replacement = placeholders.get(
-                            template.substring(index + 1, closingBrace));
-                    if (replacement != null) {
-                        formatted.append(replacement);
-                        index = closingBrace + 1;
-                        continue;
-                    }
-                }
-            }
-            formatted.append(template.charAt(index++));
-        }
-        return formatted.toString();
+        return RelayMessageFormatter.replacePlaceholders(template, placeholders);
     }
 
     private static String safe(String value, boolean escapeDiscordText) {

@@ -107,7 +107,10 @@ public final class MineBridgePlugin extends JavaPlugin {
                                 updateChecker.notifyAdmins(result, getServer().getOnlinePlayers());
                             }
                         });
-                    } catch (IllegalPluginAccessException | NoSuchMethodError ignored) {
+                    } catch (IllegalPluginAccessException ignored) {
+                        // Plugin is disabled or server is shutting down; do not touch Bukkit online players off-thread
+                    } catch (NoSuchMethodError ignored) {
+                        // Fallback for test environments without Bukkit scheduler implementation
                         updateChecker.notifyAdmins(result, getServer().getOnlinePlayers());
                     }
                 }
@@ -156,7 +159,15 @@ public final class MineBridgePlugin extends JavaPlugin {
 
     public void reloadMineBridge(Consumer<ReloadResult> callback) {
         if (lifecycleManager != null) {
-            lifecycleManager.reload(result -> deliverReloadResult(callback, result));
+            lifecycleManager.reload(result -> {
+                if (result != null && result.successful() && configManager != null && updateChecker != null) {
+                    ConfigManager.Settings current = configManager.currentSettings();
+                    if (current != null) {
+                        updateChecker.setEnabled(current.updateCheckerEnabled());
+                    }
+                }
+                deliverReloadResult(callback, result);
+            });
         } else if (callback != null) {
             deliverReloadResult(callback, new ReloadResult(false, "LifecycleManager is not initialized."));
         }
