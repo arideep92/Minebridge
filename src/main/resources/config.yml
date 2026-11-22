@@ -45,3 +45,12 @@ server:
 # Update Checker: Check for newer releases on Modrinth once during startup.
 update-checker:
   enabled: true
+
+# In-game update notifications for administrators
+notifications:
+  admin-update-notification: true
+  admin-update-notification-on-join: true
+
+# Startup console branding
+startup:
+  banner: true

@@ -309,15 +309,16 @@ class UpdateCheckerTest {
         checker.notifyIfAdmin(ordinaryPlayer, updateAvailable);
         assertEquals(0, ordinaryMessages.size(), "Ordinary player must not receive update notifications");
 
-        // Notify admin sender -> 2 messages
+        // Notify admin sender -> 3 messages (header, version details, download link)
         checker.notifyIfAdmin(adminPlayer, updateAvailable);
-        assertEquals(2, adminMessages.size(), "Admin player must receive update notifications");
-        assertTrue(adminMessages.get(0).contains("1.3.1"));
-        assertTrue(adminMessages.get(1).contains("https://modrinth.com/plugin/minebridge/version/1.3.1"));
+        assertEquals(3, adminMessages.size(), "Admin player must receive update notifications");
+        assertTrue(adminMessages.get(0).contains("update is available"));
+        assertTrue(adminMessages.get(1).contains("1.3.1"));
+        assertTrue(adminMessages.get(2).contains("https://modrinth.com/plugin/minebridge/version/1.3.1"));
 
         // Deduplication: notifying the same admin again (e.g. startup check then join) must NOT send duplicate messages
         checker.notifyIfAdmin(adminPlayer, updateAvailable);
-        assertEquals(2, adminMessages.size(), "Admin must not receive duplicate update notifications on subsequent calls");
+        assertEquals(3, adminMessages.size(), "Admin must not receive duplicate update notifications on subsequent calls");
 
         // Broadcast to group: ordinary receives nothing, already-notified admin receives nothing, new admin receives notification
         List<String> newAdminMessages = new ArrayList<>();
@@ -326,8 +327,8 @@ class UpdateCheckerTest {
         checker.notifyAdmins(updateAvailable, List.of(ordinaryPlayer, adminPlayer, newAdminPlayer));
 
         assertEquals(0, ordinaryMessages.size(), "Ordinary player must not receive update notifications from notifyAdmins");
-        assertEquals(2, adminMessages.size(), "Already notified admin must not receive duplicate notifications");
-        assertEquals(2, newAdminMessages.size(), "New admin player must receive update notifications from notifyAdmins");
+        assertEquals(3, adminMessages.size(), "Already notified admin must not receive duplicate notifications");
+        assertEquals(3, newAdminMessages.size(), "New admin player must receive update notifications from notifyAdmins");
     }
 
     @Test
@@ -450,16 +451,17 @@ class UpdateCheckerTest {
         List<String> consoleLogs = new ArrayList<>();
         checker.notifyConsole(updateAvailable, consoleLogs::add);
 
-        assertEquals(2, consoleLogs.size());
-        assertTrue(consoleLogs.get(0).contains("1.4.0"));
+        assertEquals(3, consoleLogs.size());
         assertTrue(consoleLogs.get(0).contains("1.3.0"));
-        assertTrue(consoleLogs.get(1).contains("https://modrinth.com/plugin/minebridge/version/1.4.0"));
+        assertTrue(consoleLogs.get(1).contains("1.4.0"));
+        assertTrue(consoleLogs.get(2).contains("Update available"));
 
         // When up to date, console receives up to date message
         consoleLogs.clear();
         checker.notifyConsole(UpdateChecker.UpdateResult.upToDate("1.3.0"), consoleLogs::add);
-        assertEquals(1, consoleLogs.size());
-        assertEquals("MineBridge is up to date (v1.3.0).", consoleLogs.get(0));
+        assertEquals(2, consoleLogs.size());
+        assertTrue(consoleLogs.get(0).contains("1.3.0"));
+        assertTrue(consoleLogs.get(1).contains("Up to date"));
     }
 
     @Test
@@ -470,7 +472,9 @@ class UpdateCheckerTest {
 
         checker.notifyConsole(UpdateChecker.UpdateResult.upToDate("1.3.0"));
 
-        assertEquals(List.of("MineBridge is up to date (v1.3.0)."), infoLogs);
+        assertEquals(2, infoLogs.size());
+        assertTrue(infoLogs.get(0).contains("1.3.0"));
+        assertTrue(infoLogs.get(1).contains("Up to date"));
         assertTrue(warnLogs.isEmpty());
     }
 
@@ -483,10 +487,10 @@ class UpdateCheckerTest {
         checker.notifyConsole(UpdateChecker.UpdateResult.available(
                 "1.3.0", "1.4.0", "https://modrinth.com/plugin/minebridge/version/1.4.0"));
 
-        assertEquals(2, infoLogs.size());
-        assertTrue(infoLogs.get(0).contains("1.4.0"));
+        assertEquals(3, infoLogs.size());
         assertTrue(infoLogs.get(0).contains("1.3.0"));
-        assertTrue(infoLogs.get(1).contains("https://modrinth.com/plugin/minebridge/version/1.4.0"));
+        assertTrue(infoLogs.get(1).contains("1.4.0"));
+        assertTrue(infoLogs.get(2).contains("Update available"));
         assertTrue(warnLogs.isEmpty());
     }
 
@@ -498,8 +502,10 @@ class UpdateCheckerTest {
 
         checker.notifyConsole(UpdateChecker.UpdateResult.failed("HTTP 503"));
 
-        assertTrue(infoLogs.isEmpty());
-        assertEquals(List.of("Could not check for updates: HTTP 503"), warnLogs);
+        assertEquals(2, infoLogs.size());
+        assertTrue(infoLogs.get(0).contains("1.3.0"));
+        assertTrue(infoLogs.get(1).contains("HTTP 503"));
+        assertTrue(warnLogs.isEmpty());
     }
 
     @Test

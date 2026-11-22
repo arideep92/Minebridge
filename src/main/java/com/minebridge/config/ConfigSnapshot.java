@@ -25,7 +25,9 @@ public record ConfigSnapshot(
         boolean updateCheckerEnabled,
         ConfigManager.CrossWorldSettings crossWorld,
         ConfigManager.HybridSettings hybrid,
-        ConfigManager.ChatFormattingSettings chatFormatting) {
+        ConfigManager.ChatFormattingSettings chatFormatting,
+        ConfigManager.NotificationSettings notifications,
+        ConfigManager.StartupSettings startup) {
 
     public ConfigSnapshot {
         mode = mode == null ? IntegrationMode.BOT : mode;
@@ -41,6 +43,36 @@ public record ConfigSnapshot(
         crossWorld = crossWorld == null ? ConfigManager.defaultCrossWorldSettings() : crossWorld;
         hybrid = hybrid == null ? ConfigManager.defaultHybridSettings() : hybrid;
         chatFormatting = chatFormatting == null ? ConfigManager.defaultChatFormattingSettings() : chatFormatting;
+        notifications = notifications == null ? ConfigManager.NotificationSettings.defaultSettings() : notifications;
+        startup = startup == null ? ConfigManager.StartupSettings.defaultSettings() : startup;
+    }
+
+    public ConfigSnapshot(
+            IntegrationMode mode,
+            String botToken,
+            String channelId,
+            boolean chatEnabled,
+            boolean eventsEnabled,
+            Map<String, String> messages,
+            boolean serverStatusEnabled,
+            boolean playerListEnabled,
+            ConfigManager.DeathSettings deathMessages,
+            ConfigManager.AchievementSettings achievements,
+            ConfigManager.DiscordEventsSettings discordEvents,
+            ConfigManager.WebhookSettings webhook,
+            String serverName,
+            ConfigManager.EmbedFooterSettings embedFooter,
+            boolean updateCheckerEnabled,
+            ConfigManager.CrossWorldSettings crossWorld,
+            ConfigManager.HybridSettings hybrid,
+            ConfigManager.ChatFormattingSettings chatFormatting) {
+        this(mode, botToken, channelId, chatEnabled, eventsEnabled,
+                messages, serverStatusEnabled, playerListEnabled,
+                deathMessages, achievements, discordEvents,
+                webhook, serverName, embedFooter, updateCheckerEnabled,
+                crossWorld, hybrid, chatFormatting,
+                ConfigManager.NotificationSettings.defaultSettings(),
+                ConfigManager.StartupSettings.defaultSettings());
     }
 
     public static ConfigSnapshot defaultSnapshot() {
@@ -95,7 +127,9 @@ public record ConfigSnapshot(
                 s.updateCheckerEnabled(),
                 s.crossWorld(),
                 s.hybrid(),
-                s.chatFormatting()
+                s.chatFormatting(),
+                s.notifications(),
+                s.startup()
         );
     }
 
@@ -122,7 +156,9 @@ public record ConfigSnapshot(
                 updateCheckerEnabled,
                 crossWorld,
                 hybrid,
-                chatFormatting
+                chatFormatting,
+                notifications,
+                startup
         );
     }
 }

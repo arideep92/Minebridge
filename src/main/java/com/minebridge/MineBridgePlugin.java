@@ -17,6 +17,7 @@ import com.minebridge.lifecycle.LifecycleManager;
 import com.minebridge.listener.ChatListener;
 import com.minebridge.listener.PaperChatBridge;
 import com.minebridge.listener.PlayerEventListener;
+import com.minebridge.branding.StartupBanner;
 import com.minebridge.update.UpdateChecker;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.IllegalPluginAccessException;
@@ -43,6 +44,15 @@ public final class MineBridgePlugin extends JavaPlugin {
         configManager = new ConfigManager(this);
         chatMetadataService = new ChatMetadataService(msg -> getLogger().warning(msg));
         luckPermsHook = chatMetadataService.getLuckPermsHook();
+
+        if (configManager.startupBannerEnabled()) {
+            StartupBanner.display(
+                    getServer(),
+                    msg -> getLogger().info(msg),
+                    getDescription().getVersion(),
+                    configManager.mode().name(),
+                    true);
+        }
 
         lifecycleManager = new LifecycleManager(
                 configManager,
@@ -99,8 +109,30 @@ public final class MineBridgePlugin extends JavaPlugin {
                 if (!isEnabled() || result == null) {
                     return;
                 }
-                updateChecker.notifyConsole(result, msg -> getLogger().info(msg), msg -> getLogger().warning(msg));
-                if (result.updateAvailable()) {
+                updateChecker.notifyConsole(result, msg -> {
+                    if (getServer() != null) {
+                        try {
+                            var console = getServer().getConsoleSender();
+                            if (console != null) {
+                                console.sendMessage(msg);
+                                return;
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                    getLogger().info(msg);
+                }, msg -> {
+                    if (getServer() != null) {
+                        try {
+                            var console = getServer().getConsoleSender();
+                            if (console != null) {
+                                console.sendMessage(msg);
+                                return;
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                    getLogger().warning(msg);
+                });
+                if (result.updateAvailable() && configManager.adminUpdateNotificationEnabled()) {
                     try {
                         getServer().getScheduler().runTask(this, () -> {
                             if (isEnabled()) {
@@ -155,6 +187,7 @@ public final class MineBridgePlugin extends JavaPlugin {
             lifecycleManager.shutdown();
             lifecycleManager = null;
         }
+        StartupBanner.reset();
     }
 
     public void reloadMineBridge(Consumer<ReloadResult> callback) {

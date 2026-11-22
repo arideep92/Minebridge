@@ -129,6 +129,12 @@ public final class WebhookService {
         ConfigManager.WebhookSettings webhook = getWebhookSettings();
         String username = webhook != null ? webhook.username() : "{player}";
         String avatarUrl = webhook != null ? webhook.avatarUrl() : "";
+        if (username != null && (username.contains("{player}") || username.contains("{prefix}") || username.contains("{suffix}"))) {
+            username = getServerName();
+        }
+        if (avatarUrl != null && (avatarUrl.contains("{player}") || avatarUrl.contains("{uuid}"))) {
+            avatarUrl = "";
+        }
         return send(username, avatarUrl, content);
     }
 
@@ -207,10 +213,10 @@ public final class WebhookService {
         ConfigManager.WebhookSettings webhook = getWebhookSettings();
         String username = webhook != null ? webhook.username() : "{player}";
         String avatarUrl = webhook != null ? webhook.avatarUrl() : "";
-        if (username != null && username.equals("{player}")) {
+        if (username != null && (username.contains("{player}") || username.contains("{prefix}") || username.contains("{suffix}"))) {
             username = getServerName();
         }
-        if (avatarUrl != null && avatarUrl.contains("{player}")) {
+        if (avatarUrl != null && (avatarUrl.contains("{player}") || avatarUrl.contains("{uuid}"))) {
             avatarUrl = "";
         }
         return sendEmbed(username, avatarUrl, embed);
@@ -418,13 +424,26 @@ public final class WebhookService {
             root.put("content", content);
         }
         if (username != null && !username.isBlank()) {
-            String resolvedUsername = serverName != null && !serverName.isBlank()
-                    ? username.replace("{server}", serverName) : username;
+            String resolvedUsername = username;
+            if (serverName != null && !serverName.isBlank()) {
+                resolvedUsername = resolvedUsername.replace("{server}", serverName);
+            }
+            resolvedUsername = resolvedUsername
+                    .replace("{prefix}", "")
+                    .replace("{suffix}", "")
+                    .trim();
+            if (resolvedUsername.contains("{player}")) {
+                resolvedUsername = resolvedUsername.replace("{player}", serverName != null && !serverName.isBlank() ? serverName : "Minecraft").trim();
+            }
             root.put("username", sanitizeWebhookUsername(resolvedUsername));
         }
         String safeAvatar = sanitizeAvatarUrl(avatarUrl);
         if (!safeAvatar.isEmpty()) {
-            root.put("avatar_url", safeAvatar);
+            if (safeAvatar.contains("{player}") || safeAvatar.contains("{uuid}")) {
+                safeAvatar = "";
+            } else {
+                root.put("avatar_url", safeAvatar);
+            }
         }
 
         if (embeds != null && !embeds.isEmpty()) {
@@ -448,32 +467,36 @@ public final class WebhookService {
                 }
 
                 if (embed.getFooter() != null && embed.getFooter().getText() != null) {
-                    DataObject footerNode = DataObject.empty();
                     String footerText = embed.getFooter().getText();
                     if (serverName != null && !serverName.isBlank()) {
                         footerText = footerText.replace("{server}", serverName);
                     }
-                    footerNode.put("text", footerText);
+                    if (!footerText.isBlank() && !DiscordEmbedFactory.DEFAULT_FOOTER.equals(footerText) && !"MineBridge | Minecraft Events".equals(footerText)) {
+                        DataObject footerNode = DataObject.empty();
+                        footerNode.put("text", footerText);
 
-                    String icon = embed.getFooter().getIconUrl();
-                    if ((icon == null || icon.isBlank()) && footerSettings != null) {
-                        icon = footerSettings.iconUrl();
+                        String icon = embed.getFooter().getIconUrl();
+                        if ((icon == null || icon.isBlank()) && footerSettings != null) {
+                            icon = footerSettings.iconUrl();
+                        }
+                        if (icon != null && !icon.isBlank()) {
+                            footerNode.put("icon_url", icon);
+                        }
+                        embedNode.put("footer", footerNode);
                     }
-                    if (icon != null && !icon.isBlank()) {
-                        footerNode.put("icon_url", icon);
-                    }
-                    embedNode.put("footer", footerNode);
                 } else if (footerSettings != null && !footerSettings.text().isBlank()) {
-                    DataObject footerNode = DataObject.empty();
                     String footerText = footerSettings.text();
                     if (serverName != null && !serverName.isBlank()) {
                         footerText = footerText.replace("{server}", serverName);
                     }
-                    footerNode.put("text", footerText);
-                    if (!footerSettings.iconUrl().isBlank()) {
-                        footerNode.put("icon_url", footerSettings.iconUrl());
+                    if (!footerText.isBlank() && !DiscordEmbedFactory.DEFAULT_FOOTER.equals(footerText) && !"MineBridge | Minecraft Events".equals(footerText)) {
+                        DataObject footerNode = DataObject.empty();
+                        footerNode.put("text", footerText);
+                        if (!footerSettings.iconUrl().isBlank()) {
+                            footerNode.put("icon_url", footerSettings.iconUrl());
+                        }
+                        embedNode.put("footer", footerNode);
                     }
-                    embedNode.put("footer", footerNode);
                 }
 
                 if (!embed.getFields().isEmpty()) {

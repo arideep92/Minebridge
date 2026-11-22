@@ -29,8 +29,8 @@ deaths:
     channel-id: ""
     embed: true
     title: "☠ Player death"
-    description: "{message}\nCategory: {category}\nCause: {cause}"
-    color: "#D32F2F"
+    description: "{message}"
+    color: "#E74C3C"
 
   # Toggle death notifications by category
   categories:
@@ -57,10 +57,10 @@ advancements:
     enabled: true
     channel-id: ""
     title: "ADVANCEMENT UNLOCKED"
-    description: "{player} has unlocked {title}.\n{description}"
+    description: "{player} has unlocked {title}."
     challenge-title: "CHALLENGE COMPLETED"
-    challenge-description: "{player} has completed {title}!\n{description}"
-    color: "#2196F3"
+    challenge-description: "{player} has completed {title}!"
+    color: "#3498DB"
 
   # Challenge completion toggle
   challenges:

@@ -70,7 +70,7 @@ public final class DiscordEventNotifier {
         }
         String channelId = settings.serverEventsChannelId().isBlank()
                 ? current.channelId() : settings.serverEventsChannelId();
-        send(channelId, DiscordEmbedFactory.serverStarted(footer(), footerIconUrl()));
+        send(channelId, DiscordEmbedFactory.serverStarted(serverName(), footerIconUrl()));
     }
 
     public void sendServerStop() {
@@ -84,16 +84,19 @@ public final class DiscordEventNotifier {
         }
         String channelId = settings.serverEventsChannelId().isBlank()
                 ? current.channelId() : settings.serverEventsChannelId();
-        send(channelId, DiscordEmbedFactory.serverStopped(footer(), footerIconUrl()));
+        send(channelId, DiscordEmbedFactory.serverStopped(serverName(), footerIconUrl()));
     }
 
     public String footer() {
-        ConfigManager.Settings current = config.currentSettings();
+        ConfigManager.Settings current = config != null ? config.currentSettings() : null;
+        if (current == null) {
+            return "";
+        }
         String text = current.embedFooter() != null && !current.embedFooter().text().isBlank()
                 ? current.embedFooter().text()
                 : current.discordEvents().footer();
-        if (text == null || text.isBlank()) {
-            text = DiscordEmbedFactory.DEFAULT_FOOTER;
+        if (text == null || text.isBlank() || DiscordEmbedFactory.DEFAULT_FOOTER.equals(text) || "MineBridge | Minecraft Events".equals(text)) {
+            return "";
         }
         String serverName = current.serverName() != null && !current.serverName().isBlank()
                 ? current.serverName()
@@ -102,7 +105,15 @@ public final class DiscordEventNotifier {
     }
 
     public String footerIconUrl() {
-        ConfigManager.Settings current = config.currentSettings();
-        return current.embedFooter() != null ? current.embedFooter().iconUrl() : "";
+        ConfigManager.Settings current = config != null ? config.currentSettings() : null;
+        return current != null && current.embedFooter() != null ? current.embedFooter().iconUrl() : "";
+    }
+
+    private String serverName() {
+        ConfigManager.Settings current = config != null ? config.currentSettings() : null;
+        if (current == null || current.serverName() == null || current.serverName().isBlank()) {
+            return "Minecraft Server";
+        }
+        return current.serverName();
     }
 }

@@ -17,10 +17,12 @@ public final class DiscordDeathNotifier {
             String channelId,
             DeathContext context,
             String message) {
-        String titleTemplate = settings.embedTitle() != null && !settings.embedTitle().isBlank()
-                ? settings.embedTitle()
-                : "DEATH";
-        String title = DeathMessageFormatter.formatDiscord(titleTemplate, context, message);
+        String titleTemplate = settings.embedTitle() != null ? settings.embedTitle() : "";
+        if ("☠ Player death".equalsIgnoreCase(titleTemplate) || "DEATH".equalsIgnoreCase(titleTemplate)
+                || "PLAYER DEATH".equalsIgnoreCase(titleTemplate)) {
+            titleTemplate = "";
+        }
+        String title = titleTemplate.isBlank() ? "" : DeathMessageFormatter.formatDiscord(titleTemplate, context, message);
         String descTemplate = settings.embedDescription() != null && !settings.embedDescription().isBlank()
                 ? settings.embedDescription()
                 : "{message}";

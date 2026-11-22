@@ -440,17 +440,21 @@ public final class UpdateChecker {
             return;
         }
         if (result.updateAvailable()) {
-            if (infoLogger != null) {
-                infoLogger.accept(String.format(
-                        "A new version of MineBridge is available: %s (installed: %s)",
-                        result.latestVersion(), result.installedVersion()));
-                infoLogger.accept(String.format(
-                        "Modrinth download URL: %s",
-                        result.releaseUrl()));
+            Consumer<String> logger = infoLogger != null ? infoLogger : warningLogger;
+            if (logger != null) {
+                logger.accept("§6[MineBridge] §eInstalled version: §f" + result.installedVersion());
+                logger.accept("§6[MineBridge] §eLatest version: §a" + result.latestVersion());
+                logger.accept("§6[MineBridge] §eUpdate available! Download the latest release.");
             }
         } else if (result.error() != null) {
-            if (warningLogger != null) {
-                warningLogger.accept("Could not check for updates: " + result.error());
+            Consumer<String> logger = infoLogger != null ? infoLogger : warningLogger;
+            if (logger != null) {
+                String ver = installedVersion;
+                if (ver != null && (ver.startsWith("v") || ver.startsWith("V"))) {
+                    ver = ver.substring(1);
+                }
+                logger.accept("§7[MineBridge] §7Version: §f" + ver);
+                logger.accept("§e[MineBridge] §7Update check failed: §e" + result.error());
             }
         } else {
             if (infoLogger != null) {
@@ -458,7 +462,8 @@ public final class UpdateChecker {
                 if (ver != null && (ver.startsWith("v") || ver.startsWith("V"))) {
                     ver = ver.substring(1);
                 }
-                infoLogger.accept(String.format("MineBridge is up to date (v%s).", ver));
+                infoLogger.accept("§a[MineBridge] §7Version: §f" + ver);
+                infoLogger.accept("§a[MineBridge] §aUpdate status: Up to date");
             }
         }
     }
@@ -489,7 +494,10 @@ public final class UpdateChecker {
      * the {@code minebridge.admin} permission.
      */
     public void notifyIfAdmin(CommandSender recipient, UpdateResult result) {
-        if (!result.updateAvailable() || recipient == null) {
+        if (recipient == null || result == null || !result.enabled()) {
+            return;
+        }
+        if (!result.updateAvailable()) {
             return;
         }
         if (recipient.hasPermission(ADMIN_PERMISSION)) {
@@ -504,10 +512,74 @@ public final class UpdateChecker {
             if (!notifiedRecipients.add(recipientId)) {
                 return;
             }
-            recipient.sendMessage("§b[MineBridge] §eA newer release is available: §a"
-                    + result.latestVersion() + " §7(installed: §f" + result.installedVersion() + "§7)");
-            recipient.sendMessage("§b[MineBridge] §eDownload on Modrinth: §f" + result.releaseUrl());
+            sendUpdateAvailableNotification(recipient, result);
         }
+    }
+
+    private void sendUpdateAvailableNotification(CommandSender recipient, UpdateResult result) {
+        String installed = result.installedVersion() != null ? result.installedVersion() : "unknown";
+        String latest = result.latestVersion() != null ? result.latestVersion() : "unknown";
+        if (installed.startsWith("v") || installed.startsWith("V")) {
+            installed = installed.substring(1);
+        }
+        if (latest.startsWith("v") || latest.startsWith("V")) {
+            latest = latest.substring(1);
+        }
+        String url = result.releaseUrl() != null && !result.releaseUrl().isBlank()
+                ? result.releaseUrl() : ("https://modrinth.com/plugin/" + PROJECT_SLUG);
+
+        if (recipient instanceof org.bukkit.entity.Player player) {
+            try {
+                net.md_5.bungee.api.chat.TextComponent title =
+                        new net.md_5.bungee.api.chat.TextComponent("§6[MineBridge] §eAn update is available!");
+
+                net.md_5.bungee.api.chat.TextComponent details =
+                        new net.md_5.bungee.api.chat.TextComponent("§7Installed: §f" + installed + " §7| Latest: §a" + latest);
+
+                net.md_5.bungee.api.chat.TextComponent downloadPrefix =
+                        new net.md_5.bungee.api.chat.TextComponent("§7Download: ");
+                net.md_5.bungee.api.chat.TextComponent link =
+                        new net.md_5.bungee.api.chat.TextComponent(url);
+                link.setColor(net.md_5.bungee.api.ChatColor.AQUA);
+                link.setUnderlined(true);
+                link.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
+                        net.md_5.bungee.api.chat.ClickEvent.Action.OPEN_URL, url));
+                link.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
+                        net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
+                        new net.md_5.bungee.api.chat.ComponentBuilder("Click to open download page").create()));
+                downloadPrefix.addExtra(link);
+
+                player.spigot().sendMessage(title);
+                player.spigot().sendMessage(details);
+                player.spigot().sendMessage(downloadPrefix);
+                return;
+            } catch (Throwable ignored) {
+                // Fallback for mocks / environments without player.spigot()
+            }
+        }
+
+        recipient.sendMessage("§6[MineBridge] §eAn update is available!");
+        recipient.sendMessage("§7Installed: §f" + installed + " §7| Latest: §a" + latest);
+        recipient.sendMessage("§7Download: §b" + url);
+    }
+
+    public void clearNotifiedRecipients() {
+        notifiedRecipients.clear();
+    }
+
+    public boolean isNotified(CommandSender recipient) {
+        if (recipient == null) {
+            return false;
+        }
+        String recipientId;
+        if (recipient instanceof org.bukkit.entity.Player player && player.getUniqueId() != null) {
+            recipientId = player.getUniqueId().toString();
+        } else if (recipient.getName() != null && !recipient.getName().isBlank()) {
+            recipientId = recipient.getName();
+        } else {
+            recipientId = String.valueOf(System.identityHashCode(recipient));
+        }
+        return notifiedRecipients.contains(recipientId);
     }
 
     /**
@@ -555,6 +627,10 @@ public final class UpdateChecker {
      */
     public UpdateResult getCachedResult() {
         return cachedResult;
+    }
+
+    public void setCachedResult(UpdateResult cachedResult) {
+        this.cachedResult = cachedResult;
     }
 
     /**

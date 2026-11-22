@@ -50,8 +50,9 @@ public final class ConfigManager {
             "^https://(discord\\.com|discordapp\\.com|canary\\.discord\\.com|ptb\\.discord\\.com)/api/webhooks/([0-9]{17,20})/([A-Za-z0-9_-]+)(?:\\?.*)?$");
     private static final BigInteger MAX_UNSIGNED_64_BIT = new BigInteger("18446744073709551615");
     private static final Map<String, String> SAFE_MESSAGES = Map.of(
-            "messages.minecraft-to-discord", "{prefix}**{player}**: {message}",
-            "messages.discord-to-minecraft", "&9[Discord] &f{player}: {message}",
+            "messages.minecraft-to-discord", "{prefix}{player}{suffix} » {message}",
+            "messages.minecraft-to-discord-webhook", "{message}",
+            "messages.discord-to-minecraft", "&8[&bDiscord&8] &7{player}&8: &f{message}",
             "messages.player-join", "🟢 **{player}** joined the server.",
             "messages.player-leave", "🔴 **{player}** left the server.",
             "messages.server-status", "&7Server &8| &a{online}&7/&f{max} players online",
@@ -108,7 +109,8 @@ public final class ConfigManager {
 
     public record EmbedFooterSettings(String text, String iconUrl) {
         public EmbedFooterSettings {
-            text = text == null || text.isBlank() ? DiscordEmbedFactory.DEFAULT_FOOTER : text.trim();
+            text = (text == null || text.isBlank() || "MineBridge | Minecraft Events".equals(text))
+                    ? DiscordEmbedFactory.DEFAULT_FOOTER : text.trim();
             iconUrl = iconUrl == null ? "" : iconUrl.trim();
         }
     }
@@ -192,6 +194,20 @@ public final class ConfigManager {
                 defaultDiscordChatFormattingSettings());
     }
 
+    public record NotificationSettings(
+            boolean adminUpdateNotification,
+            boolean adminUpdateNotificationOnJoin) {
+        public static NotificationSettings defaultSettings() {
+            return new NotificationSettings(true, true);
+        }
+    }
+
+    public record StartupSettings(boolean banner) {
+        public static StartupSettings defaultSettings() {
+            return new StartupSettings(true);
+        }
+    }
+
     public record Settings(
             IntegrationMode mode,
             String botToken,
@@ -210,7 +226,9 @@ public final class ConfigManager {
             boolean updateCheckerEnabled,
             CrossWorldSettings crossWorld,
             HybridSettings hybrid,
-            ChatFormattingSettings chatFormatting) {
+            ChatFormattingSettings chatFormatting,
+            NotificationSettings notifications,
+            StartupSettings startup) {
         public Settings {
             mode = mode == null ? IntegrationMode.BOT : mode;
             messages = Map.copyOf(messages);
@@ -220,6 +238,34 @@ public final class ConfigManager {
             crossWorld = crossWorld == null ? defaultCrossWorldSettings() : crossWorld;
             hybrid = hybrid == null ? defaultHybridSettings() : hybrid;
             chatFormatting = chatFormatting == null ? defaultChatFormattingSettings() : chatFormatting;
+            notifications = notifications == null ? NotificationSettings.defaultSettings() : notifications;
+            startup = startup == null ? StartupSettings.defaultSettings() : startup;
+        }
+
+        public Settings(
+                IntegrationMode mode,
+                String botToken,
+                String channelId,
+                boolean chatEnabled,
+                boolean eventsEnabled,
+                Map<String, String> messages,
+                boolean serverStatusEnabled,
+                boolean playerListEnabled,
+                DeathSettings deathMessages,
+                AchievementSettings achievements,
+                DiscordEventsSettings discordEvents,
+                WebhookSettings webhook,
+                String serverName,
+                EmbedFooterSettings embedFooter,
+                boolean updateCheckerEnabled,
+                CrossWorldSettings crossWorld,
+                HybridSettings hybrid,
+                ChatFormattingSettings chatFormatting) {
+            this(mode, botToken, channelId, chatEnabled, eventsEnabled,
+                    messages, serverStatusEnabled, playerListEnabled,
+                    deathMessages, achievements, discordEvents,
+                    webhook, serverName, embedFooter, updateCheckerEnabled, crossWorld, hybrid,
+                    chatFormatting, NotificationSettings.defaultSettings(), StartupSettings.defaultSettings());
         }
 
         public Settings(
@@ -475,7 +521,8 @@ public final class ConfigManager {
         }
 
         public DiscordEventsSettings {
-            footer = footer == null ? "MineBridge | Minecraft Events" : footer;
+            footer = (footer == null || "MineBridge | Minecraft Events".equals(footer))
+                    ? DiscordEmbedFactory.DEFAULT_FOOTER : footer;
             playerEventsChannelId = playerEventsChannelId == null ? "" : playerEventsChannelId;
             achievementsChannelId = achievementsChannelId == null ? "" : achievementsChannelId;
             deathsChannelId = deathsChannelId == null ? "" : deathsChannelId;
@@ -753,6 +800,12 @@ public final class ConfigManager {
                 discordEvents);
         errors.addAll(validateConfiguration(mode, token, channelId, requireChannelId, webhook));
 
+        boolean adminUpdateNotification = readBooleanFromSections(config, advanced, "notifications.admin-update-notification", true, errors);
+        boolean adminUpdateNotificationOnJoin = readBooleanFromSections(config, advanced, "notifications.admin-update-notification-on-join", true, errors);
+        boolean startupBanner = readBooleanFromSections(config, advanced, "startup.banner", true, errors);
+        NotificationSettings notifications = new NotificationSettings(adminUpdateNotification, adminUpdateNotificationOnJoin);
+        StartupSettings startup = new StartupSettings(startupBanner);
+
         ConfigSnapshot parsedSnapshot = new ConfigSnapshot(
                 mode,
                 token,
@@ -771,7 +824,9 @@ public final class ConfigManager {
                 updateCheckerEnabled,
                 crossWorld,
                 hybrid,
-                chatFormatting
+                chatFormatting,
+                notifications,
+                startup
         );
 
         Settings parsedSettings = parsedSnapshot.toSettings();
@@ -781,6 +836,7 @@ public final class ConfigManager {
     private static String legacyToModularMessageKey(String legacyKey) {
         return switch (legacyKey) {
             case "messages.minecraft-to-discord" -> "chat.minecraft-to-discord";
+            case "messages.minecraft-to-discord-webhook" -> "chat.minecraft-to-discord-webhook";
             case "messages.discord-to-minecraft" -> "chat.discord-to-minecraft";
             case "messages.player-join" -> "player.join";
             case "messages.player-leave" -> "player.leave";
@@ -988,6 +1044,9 @@ public final class ConfigManager {
         String footer = readStringFrom(advanced, "embeds.footer.default-text",
                 config != null ? "discord-events.embeds.footer" : null,
                 DiscordEmbedFactory.DEFAULT_FOOTER, errors);
+        if ("MineBridge | Minecraft Events".equals(footer)) {
+            footer = DiscordEmbedFactory.DEFAULT_FOOTER;
+        }
 
         String playerChannel = readOptionalChannelIdFrom(events, "player-events.channel-id",
                 config != null ? "discord-events.player-events.channel-id" : null, errors);
@@ -1181,8 +1240,8 @@ public final class ConfigManager {
         String iconUrl = readStringFrom(advanced, "embeds.footer.icon-url",
                 config != null ? "discord.embed.footer.icon-url" : null, "", errors);
 
-        if (text == null || text.isBlank()) {
-            text = legacyFooter != null && !legacyFooter.isBlank()
+        if (text == null || text.isBlank() || "MineBridge | Minecraft Events".equals(text)) {
+            text = (legacyFooter != null && !legacyFooter.isBlank() && !"MineBridge | Minecraft Events".equals(legacyFooter))
                     ? legacyFooter : DiscordEmbedFactory.DEFAULT_FOOTER;
         }
         return new EmbedFooterSettings(text, iconUrl);
@@ -1464,7 +1523,7 @@ public final class ConfigManager {
         return new DiscordEventsSettings(
                 true,
                 true,
-                "MineBridge | Minecraft Events",
+                DiscordEmbedFactory.DEFAULT_FOOTER,
                 true,
                 "",
                 true,
@@ -1690,6 +1749,46 @@ public final class ConfigManager {
 
     public boolean updateCheckerEnabled() {
         return settings != null && settings.updateCheckerEnabled();
+    }
+
+    public boolean startupBannerEnabled() {
+        return settings == null || settings.startup() == null || settings.startup().banner();
+    }
+
+    public boolean adminUpdateNotificationEnabled() {
+        return settings == null || settings.notifications() == null || settings.notifications().adminUpdateNotification();
+    }
+
+    public boolean adminUpdateNotificationOnJoinEnabled() {
+        return settings == null || settings.notifications() == null || settings.notifications().adminUpdateNotificationOnJoin();
+    }
+
+    private static boolean readBooleanFromSections(
+            ConfigurationSection primary,
+            ConfigurationSection secondary,
+            String path,
+            boolean defaultValue,
+            List<String> errors) {
+        if (primary != null && primary.contains(path)) {
+            Object val = primary.get(path);
+            if (val instanceof Boolean b) {
+                return b;
+            }
+            if (val instanceof String s && ("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s))) {
+                return Boolean.parseBoolean(s);
+            }
+            errors.add(path + " must be a boolean (true/false).");
+        } else if (secondary != null && secondary.contains(path)) {
+            Object val = secondary.get(path);
+            if (val instanceof Boolean b) {
+                return b;
+            }
+            if (val instanceof String s && ("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s))) {
+                return Boolean.parseBoolean(s);
+            }
+            errors.add(path + " must be a boolean (true/false).");
+        }
+        return defaultValue;
     }
 
     public String message(String key, String fallback) {
