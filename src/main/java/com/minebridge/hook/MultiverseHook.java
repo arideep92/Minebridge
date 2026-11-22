@@ -127,41 +127,19 @@ public class MultiverseHook {
 
                 ClassLoader loader = mvPlugin.getClass().getClassLoader();
                 Class<?> mvClass = mvPlugin.getClass();
-                getMVWorldManagerMethod = mvClass.getMethod("getMVWorldManager");
+                getMVWorldManagerMethod = HookUtil.findMethod(mvClass, "getMVWorldManager");
 
-                Class<?> worldManagerClass = null;
-                try {
-                    worldManagerClass = loader.loadClass("com.onarandombox.MultiverseCore.api.MVWorldManager");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        worldManagerClass = Class.forName("com.onarandombox.MultiverseCore.api.MVWorldManager");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> worldManagerClass = HookUtil.loadClass(loader, "com.onarandombox.MultiverseCore.api.MVWorldManager");
                 if (worldManagerClass != null) {
-                    try {
-                        getMVWorldMethod = worldManagerClass.getMethod("getMVWorld", World.class);
-                    } catch (NoSuchMethodException e) {
-                        try {
-                            getMVWorldMethod = worldManagerClass.getMethod("getMVWorld", String.class);
-                        } catch (NoSuchMethodException ignored) {
-                        }
+                    getMVWorldMethod = HookUtil.findMethod(worldManagerClass, "getMVWorld", World.class);
+                    if (getMVWorldMethod == null) {
+                        getMVWorldMethod = HookUtil.findMethod(worldManagerClass, "getMVWorld", String.class);
                     }
                 }
 
-                Class<?> mvWorldClass = null;
-                try {
-                    mvWorldClass = loader.loadClass("com.onarandombox.MultiverseCore.api.MultiverseWorld");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        mvWorldClass = Class.forName("com.onarandombox.MultiverseCore.api.MultiverseWorld");
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-
+                Class<?> mvWorldClass = HookUtil.loadClass(loader, "com.onarandombox.MultiverseCore.api.MultiverseWorld");
                 if (mvWorldClass != null) {
-                    getAliasMethod = mvWorldClass.getMethod("getAlias");
+                    getAliasMethod = HookUtil.findMethod(mvWorldClass, "getAlias");
                 }
 
                 initialized = true;

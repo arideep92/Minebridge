@@ -308,12 +308,12 @@ public final class WebhookService {
             warnRateLimited("webhook-error", "Discord webhook request failed with unexpected HTTP " + code + ".");
         } catch (IOException exception) {
             handleTemporaryFailure(item, "Network error during Discord webhook request ("
-                    + exception.getClass().getSimpleName() + ")");
+                    + DiscordDiagnosticFormatter.simpleTypeName(exception) + ")");
         } catch (RuntimeException exception) {
             outgoingDropped.incrementAndGet();
             pendingRetry = null;
             warnRateLimited("webhook-exception", "Unexpected error dispatching Discord webhook ("
-                    + exception.getClass().getSimpleName() + ").");
+                    + DiscordDiagnosticFormatter.simpleTypeName(exception) + ").");
         }
     }
 
@@ -323,12 +323,12 @@ public final class WebhookService {
             rateLimitDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(backoffMs);
             pendingRetry = new RetryItem(item.payloadJson(), item.attemptCount() + 1);
             warnRateLimited("webhook-temp-failure",
-                    reason + "; retrying in " + backoffMs + "ms (attempt " + item.attemptCount() + "/" + MAX_RETRIES + ").");
+                    DiscordDiagnosticFormatter.formatRetry(reason, backoffMs, item.attemptCount(), MAX_RETRIES));
         } else {
             outgoingDropped.incrementAndGet();
             pendingRetry = null;
             warnRateLimited("webhook-max-retries",
-                    reason + "; exceeded " + MAX_RETRIES + " attempts, message dropped.");
+                    DiscordDiagnosticFormatter.formatMaxRetriesExceeded(reason, MAX_RETRIES));
         }
     }
 

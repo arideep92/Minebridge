@@ -145,30 +145,18 @@ public class EssentialsHook {
                     }
                 }
 
-                Class<?> userClass = null;
-                try {
-                    userClass = loader.loadClass("com.earth2me.essentials.User");
-                } catch (ClassNotFoundException e) {
-                    try {
-                        userClass = Class.forName("com.earth2me.essentials.User");
-                    } catch (ClassNotFoundException ignored) {
-                        try {
-                            userClass = loader.loadClass("net.ess3.api.IUser");
-                        } catch (ClassNotFoundException ignored2) {
-                        }
-                    }
+                Class<?> userClass = HookUtil.loadClass(loader, "com.earth2me.essentials.User");
+                if (userClass == null) {
+                    userClass = HookUtil.loadClass(loader, "net.ess3.api.IUser");
                 }
 
                 if (userClass != null) {
                     // Try getNickname, getNick, or getDisplayName on User
                     for (String name : new String[]{"getNickname", "getNick", "getDisplayName"}) {
-                        try {
-                            Method m = userClass.getMethod(name);
-                            if (m.getParameterCount() == 0 && String.class.isAssignableFrom(m.getReturnType())) {
-                                getNicknameMethod = m;
-                                break;
-                            }
-                        } catch (NoSuchMethodException ignored) {
+                        Method m = HookUtil.findMethod(userClass, name);
+                        if (m != null && m.getParameterCount() == 0 && String.class.isAssignableFrom(m.getReturnType())) {
+                            getNicknameMethod = m;
+                            break;
                         }
                     }
                 }

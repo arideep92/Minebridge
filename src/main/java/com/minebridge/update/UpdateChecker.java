@@ -258,8 +258,9 @@ public final class UpdateChecker {
     }
 
     private final String installedVersion;
-    private final boolean enabled;
+    private volatile boolean enabled;
     private final Call.Factory callFactory;
+    private final OkHttpClient defaultClient;
     private final ExecutorService executor;
     private final boolean ownsExecutor;
     private final Consumer<String> infoLogger;
@@ -293,17 +294,19 @@ public final class UpdateChecker {
             ExecutorService executor,
             Consumer<String> infoLogger,
             Consumer<String> warningLogger) {
-        this.installedVersion = installedVersion != null ? installedVersion.trim() : "1.3.0";
+        this.installedVersion = installedVersion != null ? installedVersion.trim() : "1.3.2";
         this.enabled = enabled;
         this.infoLogger = infoLogger != null ? infoLogger : msg -> {};
         this.warningLogger = warningLogger != null ? warningLogger : msg -> {};
 
         if (callFactory == null) {
-            this.callFactory = new OkHttpClient.Builder()
+            this.defaultClient = new OkHttpClient.Builder()
                     .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS))
                     .readTimeout(Duration.ofSeconds(READ_TIMEOUT_SECONDS))
                     .build();
+            this.callFactory = this.defaultClient;
         } else {
+            this.defaultClient = null;
             this.callFactory = callFactory;
         }
 
@@ -515,7 +518,7 @@ public final class UpdateChecker {
         if (call != null && !call.isCanceled()) {
             call.cancel();
         }
-        if (executor != null && !executor.isShutdown()) {
+        if (ownsExecutor && executor != null && !executor.isShutdown()) {
             executor.shutdown();
             try {
                 if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
@@ -525,6 +528,18 @@ public final class UpdateChecker {
                 executor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
+        }
+        if (defaultClient != null) {
+            defaultClient.dispatcher().executorService().shutdown();
+            defaultClient.connectionPool().evictAll();
+        }
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+        if (!enabled) {
+            notifiedRecipients.clear();
+            cachedResult = null;
         }
     }
 

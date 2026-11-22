@@ -20,6 +20,10 @@ public final class PaperChatBridge {
 
     private static final String PAPER_ASYNC_CHAT_EVENT = "io.papermc.paper.event.player.AsyncChatEvent";
     private static volatile Boolean paperAvailable = null;
+    private static final Object SERIALIZER_LOCK = new Object();
+    private static volatile boolean serializerResolved = false;
+    private static Object cachedSerializer = null;
+    private static Method cachedSerializeMethod = null;
 
     private PaperChatBridge() {
     }
@@ -115,17 +119,34 @@ public final class PaperChatBridge {
             return null;
         }
 
-        // 1. Try PlainTextComponentSerializer.plainText().serialize(...)
-        try {
-            Class<?> serializerClass = Class.forName(
-                    "net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer");
-            Method plainTextMethod = serializerClass.getMethod("plainText");
-            Object serializer = plainTextMethod.invoke(null);
-            Class<?> compClass = Class.forName("net.kyori.adventure.text.Component");
-            Method serializeMethod = serializerClass.getMethod("serialize", compClass);
-            return (String) serializeMethod.invoke(serializer, component);
-        } catch (Throwable ignored) {
-            HookUtil.checkFatal(ignored);
+        // 1. Try cached PlainTextComponentSerializer.plainText().serialize(...)
+        if (!serializerResolved) {
+            synchronized (SERIALIZER_LOCK) {
+                if (!serializerResolved) {
+                    try {
+                        Class<?> serializerClass = Class.forName(
+                                "net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer");
+                        Method plainTextMethod = serializerClass.getMethod("plainText");
+                        Object serializer = plainTextMethod.invoke(null);
+                        Class<?> compClass = Class.forName("net.kyori.adventure.text.Component");
+                        Method serializeMethod = serializerClass.getMethod("serialize", compClass);
+                        cachedSerializer = serializer;
+                        cachedSerializeMethod = serializeMethod;
+                    } catch (Throwable ignored) {
+                        HookUtil.checkFatal(ignored);
+                    } finally {
+                        serializerResolved = true;
+                    }
+                }
+            }
+        }
+
+        if (cachedSerializeMethod != null && cachedSerializer != null) {
+            try {
+                return (String) cachedSerializeMethod.invoke(cachedSerializer, component);
+            } catch (Throwable ignored) {
+                HookUtil.checkFatal(ignored);
+            }
         }
 
         // 2. Try TextComponent.content()
@@ -137,5 +158,13 @@ public final class PaperChatBridge {
         }
 
         return null;
+    }
+
+    public static void resetSerializerCacheForTesting() {
+        synchronized (SERIALIZER_LOCK) {
+            serializerResolved = false;
+            cachedSerializer = null;
+            cachedSerializeMethod = null;
+        }
     }
 }

@@ -73,16 +73,16 @@ MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for
 
 ### Download or Build
 
-1. Download the latest `MineBridge-1.3.1.jar` release from [Modrinth](https://modrinth.com/plugin/minebridge) or [GitHub Releases](https://github.com/Aridro/MineBridge/releases).
+1. Download the latest `MineBridge-1.3.2.jar` release from [Modrinth](https://modrinth.com/plugin/minebridge) or [GitHub Releases](https://github.com/Aridro/MineBridge/releases).
 2. Alternatively, compile from source:
    ```sh
    ./gradlew shadowJar
    ```
-   The shaded JAR will be created at `build/libs/MineBridge-1.3.1.jar`.
+   The shaded JAR will be created at `build/libs/MineBridge-1.3.2.jar`.
 
 ### Installation
 
-1. Place `MineBridge-1.3.1.jar` into your server's `plugins/` directory.
+1. Place `MineBridge-1.3.2.jar` into your server's `plugins/` directory.
 2. Start the server. MineBridge will automatically generate the default `plugins/MineBridge/config.yml` on first boot.
 3. Configure either **BOT Mode** or **WEBHOOK Mode** as described in the guides below.
 4. Execute `/minebridge reload` (or `/mb reload`) in-game or from console to apply the configuration.
@@ -362,7 +362,7 @@ MineBridge provides a unified administrative and player command interface under 
 
 ### Startup & First-Time Configuration
 - **MineBridge started with `INVALID_CONFIGURATION`**: This is completely normal on the first startup. It indicates that `discord.bot-token` or `discord.channel-id` (or `discord.webhook.url`) is empty. The plugin remains active; simply fill in your credentials in `plugins/MineBridge/config.yml` and execute `/mb reload`.
-- **Did MineBridge get disabled on startup?**: In v1.3.1, missing Discord credentials will **never** disable MineBridge. If `/mb` commands work, the plugin is active and waiting for your configuration.
+- **Did MineBridge get disabled on startup?**: In v1.3.2, missing Discord credentials will **never** disable MineBridge. If `/mb` commands work, the plugin is active and waiting for your configuration.
 - **Reloading after adding token**: Run `/mb reload`. If the configuration is valid, the status will transition from `INVALID_CONFIGURATION` to `CONNECTING` and then `CONNECTED` (or `READY` for webhooks).
 
 ### Bot Mode

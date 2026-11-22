@@ -427,8 +427,8 @@ public final class ConfigManager {
         }
 
         String configuredToken = environmentToken == null || environmentToken.isBlank()
-                ? readString(configuration, "discord.bot-token", errors) : "";
-        String channelId = readString(configuration, "discord.channel-id", errors);
+                ? readStringOrDefault(configuration, "discord.bot-token", "", errors) : "";
+        String channelId = readStringOrDefault(configuration, "discord.channel-id", "", errors);
         Object chatValue = configuration.get("features.chat-relay");
         Object eventsValue = configuration.get("features.join-leave-notifications");
         Object serverStatusValue = configuration.get("features.server-status");
@@ -711,12 +711,8 @@ public final class ConfigManager {
             errors.add("death-messages must be a configuration section.");
             return defaultDeathSettings();
         }
-        for (String section : List.of("minecraft", "discord", "categories", "messages")) {
-            Object value = configuration.get("death-messages." + section);
-            if (value != null && !(value instanceof ConfigurationSection)) {
-                errors.add("death-messages." + section + " must be a configuration section.");
-            }
-        }
+        validateSubsections(configuration, "death-messages",
+                List.of("minecraft", "discord", "categories", "messages"), errors);
 
         Map<String, Boolean> categories = new java.util.HashMap<>();
         for (DeathCategory category : DeathCategory.values()) {
@@ -750,27 +746,11 @@ public final class ConfigManager {
         templates.put("discord.description", description);
         errors.addAll(validateDeathMessageTemplates(templates));
 
-        String deathChannelId = readStringOrDefault(
-                configuration, "death-messages.discord.channel-id", "", errors);
-        if (!deathChannelId.isBlank() && !isValidChannelId(deathChannelId)) {
-            errors.add(
-                    "death-messages.discord.channel-id must be a 17-20 digit Discord channel ID.");
-        }
+        String deathChannelId = readOptionalChannelId(
+                configuration, "death-messages.discord.channel-id", errors);
 
-        Object colorValue = configuration.get("death-messages.discord.color");
-        String color = colorValue == null ? "#D32F2F"
-                : colorValue instanceof String stringValue ? stringValue : null;
-        int embedColor = 0xD32F2F;
-        if (color == null) {
-            errors.add("death-messages.discord.color must be a six-digit hex color string.");
-        } else {
-            String normalized = color.startsWith("#") ? color.substring(1) : color;
-            if (!normalized.matches("[0-9a-fA-F]{6}")) {
-                errors.add("death-messages.discord.color must be a six-digit hex color string.");
-            } else {
-                embedColor = Integer.parseInt(normalized, 16);
-            }
-        }
+        int embedColor = readHexColor(
+                configuration, "death-messages.discord.color", 0xD32F2F, errors);
 
         return new DeathSettings(
                 readBoolean(configuration, "death-messages.enabled", true, errors),
@@ -793,12 +773,8 @@ public final class ConfigManager {
             errors.add("achievements must be a configuration section.");
             return defaultAchievementSettings();
         }
-        for (String section : List.of("minecraft", "discord", "categories", "messages", "challenges")) {
-            Object value = configuration.get("achievements." + section);
-            if (value != null && !(value instanceof ConfigurationSection)) {
-                errors.add("achievements." + section + " must be a configuration section.");
-            }
-        }
+        validateSubsections(configuration, "achievements",
+                List.of("minecraft", "discord", "categories", "messages", "challenges"), errors);
 
         Map<String, Boolean> categories = new java.util.HashMap<>();
         for (AdvancementCategory category : AdvancementCategory.values()) {
@@ -849,26 +825,11 @@ public final class ConfigManager {
                 "discord.challenge-title", challengeTitle,
                 "discord.challenge-description", challengeDescription)));
 
-        String channelId = readStringOrDefault(
-                configuration, "achievements.discord.channel-id", "", errors);
-        if (!channelId.isBlank() && !isValidChannelId(channelId)) {
-            errors.add("achievements.discord.channel-id must be a 17-20 digit Discord channel ID.");
-        }
+        String channelId = readOptionalChannelId(
+                configuration, "achievements.discord.channel-id", errors);
 
-        Object colorValue = configuration.get("achievements.discord.color");
-        String color = colorValue == null ? "#2196F3"
-                : colorValue instanceof String stringValue ? stringValue : null;
-        int embedColor = 0x2196F3;
-        if (color == null) {
-            errors.add("achievements.discord.color must be a six-digit hex color string.");
-        } else {
-            String normalized = color.startsWith("#") ? color.substring(1) : color;
-            if (!normalized.matches("[0-9a-fA-F]{6}")) {
-                errors.add("achievements.discord.color must be a six-digit hex color string.");
-            } else {
-                embedColor = Integer.parseInt(normalized, 16);
-            }
-        }
+        int embedColor = readHexColor(
+                configuration, "achievements.discord.color", 0x2196F3, errors);
 
         return new AchievementSettings(
                 readBoolean(configuration, "achievements.enabled", true, errors),
@@ -893,30 +854,20 @@ public final class ConfigManager {
             errors.add("discord-events must be a configuration section.");
             return defaultDiscordEventsSettings();
         }
-        for (String section : List.of("embeds", "player-events", "achievements", "deaths")) {
-            Object value = configuration.get("discord-events." + section);
-            if (value != null && !(value instanceof ConfigurationSection)) {
-                errors.add("discord-events." + section + " must be a configuration section.");
-            }
-        }
+        validateSubsections(configuration, "discord-events",
+                List.of("embeds", "player-events", "achievements", "deaths"), errors);
 
         String footer = readStringOrDefault(
                 configuration,
                 "discord-events.embeds.footer",
                 DiscordEmbedFactory.DEFAULT_FOOTER,
                 errors);
-        String playerChannel = readStringOrDefault(
-                configuration, "discord-events.player-events.channel-id", "", errors);
-        String achievementChannel = readStringOrDefault(
-                configuration, "discord-events.achievements.channel-id", "", errors);
-        String deathsChannel = readStringOrDefault(
-                configuration, "discord-events.deaths.channel-id", "", errors);
-        validateOptionalChannelId(
-                "discord-events.player-events.channel-id", playerChannel, errors);
-        validateOptionalChannelId(
-                "discord-events.achievements.channel-id", achievementChannel, errors);
-        validateOptionalChannelId(
-                "discord-events.deaths.channel-id", deathsChannel, errors);
+        String playerChannel = readOptionalChannelId(
+                configuration, "discord-events.player-events.channel-id", errors);
+        String achievementChannel = readOptionalChannelId(
+                configuration, "discord-events.achievements.channel-id", errors);
+        String deathsChannel = readOptionalChannelId(
+                configuration, "discord-events.deaths.channel-id", errors);
 
         Map<String, Boolean> achievementCategories = new java.util.HashMap<>();
         for (AdvancementCategory category : AdvancementCategory.values()) {
@@ -957,10 +908,56 @@ public final class ConfigManager {
                         configuration, "discord-events.deaths.environmental", true, errors));
     }
 
-    private static void validateOptionalChannelId(
-            String path, String channelId, List<String> errors) {
+    public static void validateSubsections(
+            ConfigurationSection configuration,
+            String parentPath,
+            List<String> subSections,
+            List<String> errors) {
+        for (String section : subSections) {
+            String path = parentPath + "." + section;
+            Object value = configuration.get(path);
+            if (value != null && !(value instanceof ConfigurationSection)) {
+                errors.add(path + " must be a configuration section.");
+            }
+        }
+    }
+
+    public static String readOptionalChannelId(
+            ConfigurationSection configuration,
+            String path,
+            List<String> errors) {
+        String channelId = readStringOrDefault(configuration, path, "", errors);
         if (!channelId.isBlank() && !isValidChannelId(channelId)) {
             errors.add(path + " must be a 17-20 digit Discord channel ID.");
+        }
+        return channelId;
+    }
+
+    public static int readHexColor(
+            ConfigurationSection configuration,
+            String path,
+            int defaultColor,
+            List<String> errors) {
+        Object colorValue = configuration.get(path);
+        String color = colorValue == null ? null
+                : colorValue instanceof String stringValue ? stringValue : null;
+        if (colorValue == null) {
+            return defaultColor;
+        }
+        if (color == null) {
+            errors.add(path + " must be a six-digit hex color string.");
+            return defaultColor;
+        }
+        String normalized = color.startsWith("#") ? color.substring(1) : color;
+        if (!normalized.matches("[0-9a-fA-F]{6}")) {
+            errors.add(path + " must be a six-digit hex color string.");
+            return defaultColor;
+        }
+        try {
+            return Integer.parseInt(normalized, 16);
+        } catch (NumberFormatException ignored) {
+            errors.add(path + " must be a six-digit hex color string.");
+            return defaultColor;
         }
     }
 
@@ -1311,21 +1308,12 @@ public final class ConfigManager {
         if (stream == null) {
             throw new IOException("Bundled config.yml is missing.");
         }
-        try (InputStream in = stream) {
+        try (InputStream in = stream;
+             InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
             YamlConfiguration defaults = new YamlConfiguration();
-            defaults.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+            defaults.load(reader);
             return defaults;
         }
-    }
-
-    private static String readString(
-            ConfigurationSection configuration, String key, List<String> errors) {
-        Object value = configuration.get(key);
-        if (!(value instanceof String stringValue)) {
-            errors.add(key + " must be a string.");
-            return null;
-        }
-        return stringValue;
     }
 
 }

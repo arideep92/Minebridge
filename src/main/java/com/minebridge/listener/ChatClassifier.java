@@ -97,34 +97,11 @@ public final class ChatClassifier {
     }
 
     /**
-     * Core classification logic operating on explicit chat event attributes.
+     * Verifies that the sender and message content meet public chat criteria.
+     * Excludes commands, private messaging formats, channel prefixes, channel tags,
+     * and players with non-global channel metadata.
      */
-    public static boolean isGlobalChat(
-            Player sender,
-            String message,
-            String format,
-            boolean cancelled,
-            Collection<? extends Player> recipients,
-            Collection<? extends Player> onlinePlayers) {
-        return isGlobalChat(
-                sender,
-                message,
-                format,
-                cancelled,
-                recipients,
-                onlinePlayers,
-                ConfigManager.defaultCrossWorldSettings());
-    }
-
-    public static boolean isGlobalChat(
-            Player sender,
-            String message,
-            String format,
-            boolean cancelled,
-            Collection<? extends Player> recipients,
-            Collection<? extends Player> onlinePlayers,
-            ConfigManager.CrossWorldSettings crossWorld) {
-
+    public static boolean isPublicChatMessage(Player sender, String message, String format, boolean cancelled) {
         if (cancelled) {
             return false;
         }
@@ -167,30 +144,58 @@ public final class ChatClassifier {
         }
 
         // 6. Exclude if sender has active non-global channel metadata
-        if (hasPrivateChannelMetadata(sender)) {
+        return !hasPrivateChannelMetadata(sender);
+    }
+
+    /**
+     * Core classification logic operating on explicit chat event attributes.
+     */
+    public static boolean isGlobalChat(
+            Player sender,
+            String message,
+            String format,
+            boolean cancelled,
+            Collection<? extends Player> recipients,
+            Collection<? extends Player> onlinePlayers) {
+        return isGlobalChat(
+                sender,
+                message,
+                format,
+                cancelled,
+                recipients,
+                onlinePlayers,
+                ConfigManager.defaultCrossWorldSettings());
+    }
+
+    public static boolean isGlobalChat(
+            Player sender,
+            String message,
+            String format,
+            boolean cancelled,
+            Collection<? extends Player> recipients,
+            Collection<? extends Player> onlinePlayers,
+            ConfigManager.CrossWorldSettings crossWorld) {
+
+        if (!isPublicChatMessage(sender, message, format, cancelled)) {
             return false;
         }
 
-        // 7. Validate recipients collection basics
-        if (recipients == null || recipients.isEmpty()) {
-            return false;
-        }
-
-        if (!recipients.contains(sender)) {
+        // Validate recipients collection basics
+        if (recipients == null || recipients.isEmpty() || !recipients.contains(sender)) {
             return false;
         }
 
         ConfigManager.CrossWorldSettings settings = crossWorld != null
                 ? crossWorld : ConfigManager.defaultCrossWorldSettings();
 
-        // 8. Filtered mode: world must be whitelisted
+        // Filtered mode: world must be whitelisted
         if (settings.mode() == ConfigManager.CrossWorldMode.FILTERED) {
             if (sender.getWorld() == null || !settings.enabledWorlds().contains(sender.getWorld().getName())) {
                 return false;
             }
         }
 
-        // 9. Audience verification
+        // Audience verification
         if (settings.mode() == ConfigManager.CrossWorldMode.PER_WORLD) {
             Collection<? extends Player> worldPlayers = sender.getWorld() != null
                     ? sender.getWorld().getPlayers() : onlinePlayers;
@@ -247,47 +252,11 @@ public final class ChatClassifier {
             Collection<? extends Player> onlinePlayers,
             ConfigManager.CrossWorldSettings crossWorld) {
 
-        if (cancelled) {
+        if (!isPublicChatMessage(sender, message, null, cancelled)) {
             return false;
         }
 
-        if (sender == null || !isValidSender(sender)) {
-            return false;
-        }
-
-        if (message == null || message.trim().isEmpty()) {
-            return false;
-        }
-
-        String trimmed = message.trim();
-
-        if (trimmed.startsWith("/")
-                || PRIVATE_COMMAND_PATTERN.matcher(trimmed).find()
-                || CHANNEL_PREFIX_COMMAND_PATTERN.matcher(trimmed).find()) {
-            return false;
-        }
-
-        if (PRIVATE_MESSAGE_TEXT_PATTERN.matcher(trimmed).find()) {
-            return false;
-        }
-
-        if (CHANNEL_SHORTCUT_PATTERN.matcher(trimmed).find()) {
-            return false;
-        }
-
-        if (NON_GLOBAL_CHANNEL_TAG_PATTERN.matcher(trimmed).find()) {
-            return false;
-        }
-
-        if (hasPrivateChannelMetadata(sender)) {
-            return false;
-        }
-
-        if (viewers == null || viewers.isEmpty()) {
-            return false;
-        }
-
-        if (!viewers.contains(sender)) {
+        if (viewers == null || viewers.isEmpty() || !viewers.contains(sender)) {
             return false;
         }
 

@@ -23,8 +23,8 @@ public final class ChatListener implements Listener {
     private final ConfigManager config;
     private final ChatMetadataService chatMetadata;
     private final ChatDeduplicator deduplicator;
-    private DiscordService discord;
-    private WebhookService webhook;
+    private volatile DiscordService discord;
+    private volatile WebhookService webhook;
 
     public ChatListener(MineBridgePlugin plugin, DiscordService discord, ConfigManager config) {
         this(plugin, discord, null, config, new ChatMetadataService(), new ChatDeduplicator());

@@ -233,15 +233,15 @@ public final class RelayMessageFormatter {
             preparedTemplate = preparedTemplate.replace(" {suffix}", "");
         }
 
-        return preparedTemplate
-                .replace("{prefix}", formattedPrefix)
-                .replace("{suffix}", formattedSuffix)
-                .replace("{player}", effectivePlayer)
-                .replace("{nickname}", effectiveNickname)
-                .replace("{display_name}", effectiveNickname)
-                .replace("{server}", effectiveServer)
-                .replace("{world}", effectiveWorld)
-                .replace("{world_alias}", effectiveWorldAlias);
+        return replacePlaceholders(preparedTemplate, Map.of(
+                "prefix", formattedPrefix,
+                "suffix", formattedSuffix,
+                "player", effectivePlayer,
+                "nickname", effectiveNickname,
+                "display_name", effectiveNickname,
+                "server", effectiveServer,
+                "world", effectiveWorld,
+                "world_alias", effectiveWorldAlias));
     }
 
     public static String escapeDiscordPrefix(String input) {
@@ -293,7 +293,7 @@ public final class RelayMessageFormatter {
         return escapeDiscordMassMentions(markdownEscaped);
     }
 
-    private static String replacePlaceholders(
+    public static String replacePlaceholders(
             String template, Map<String, String> placeholders) {
         if (template == null || template.isEmpty()) {
             return "";
