@@ -54,30 +54,58 @@ public final class StartupBanner {
         return Collections.unmodifiableList(lines);
     }
 
-    public static boolean display(Server server, Consumer<String> fallbackLogger, String version, String mode, boolean enabled) {
-        if (!DISPLAYED.compareAndSet(false, true)) {
+    public static synchronized boolean display(
+            Server server,
+            Consumer<String> logger,
+            String version,
+            String mode,
+            boolean enabled) {
+        if (DISPLAYED.get()) {
             return false;
         }
+
         List<String> lines = getBannerLines(version, mode, enabled, true);
-        if (server != null) {
+        boolean success = false;
+
+        // 1. Prefer plugin logger for predictable output to console and logs/latest.log
+        if (logger != null) {
+            try {
+                for (String line : lines) {
+                    logger.accept(line);
+                }
+                success = true;
+            } catch (Throwable ignored) {
+                // If logger fails unexpectedly, fall through to server console sender
+            }
+        }
+
+        // 2. Fallback to server console sender if logger was unavailable or failed
+        if (!success && server != null) {
             try {
                 ConsoleCommandSender console = server.getConsoleSender();
                 if (console != null) {
                     for (String line : lines) {
                         console.sendMessage(line);
                     }
-                    return true;
+                    success = true;
                 }
             } catch (Throwable ignored) {
             }
         }
-        if (fallbackLogger != null) {
-            for (String line : lines) {
-                fallbackLogger.accept(line);
-            }
+
+        if (success) {
+            DISPLAYED.set(true);
             return true;
         }
         return false;
+    }
+
+    public static boolean display(
+            Consumer<String> logger,
+            String version,
+            String mode,
+            boolean enabled) {
+        return display(null, logger, version, mode, enabled);
     }
 
     public static boolean hasBeenDisplayed() {
