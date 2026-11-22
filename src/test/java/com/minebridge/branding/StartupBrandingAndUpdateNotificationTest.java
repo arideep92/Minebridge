@@ -167,6 +167,98 @@ class StartupBrandingAndUpdateNotificationTest {
         assertTrue(consoleMessages.stream().anyMatch(l -> l.contains("WEBHOOK")));
     }
 
+    @Test
+    @DisplayName("Banner prefers plugin logger over console sender when both are provided")
+    void bannerPrefersPluginLoggerOverConsoleSender() {
+        List<String> consoleMessages = new ArrayList<>();
+        ConsoleCommandSender consoleMock = (ConsoleCommandSender) Proxy.newProxyInstance(
+                ConsoleCommandSender.class.getClassLoader(),
+                new Class<?>[]{ConsoleCommandSender.class},
+                (proxy, method, args) -> {
+                    if ("sendMessage".equals(method.getName())) {
+                        consoleMessages.add(String.valueOf(args[0]));
+                        return null;
+                    }
+                    return null;
+                });
+
+        Server serverMock = (Server) Proxy.newProxyInstance(
+                Server.class.getClassLoader(),
+                new Class<?>[]{Server.class},
+                (proxy, method, args) -> {
+                    if ("getConsoleSender".equals(method.getName())) {
+                        return consoleMock;
+                    }
+                    return null;
+                });
+
+        List<String> loggerMessages = new ArrayList<>();
+        boolean displayed = StartupBanner.display(serverMock, loggerMessages::add, "1.4.0", "BOT", true);
+
+        assertTrue(displayed, "Banner display must succeed");
+        assertTrue(StartupBanner.hasBeenDisplayed());
+        assertFalse(loggerMessages.isEmpty(), "Logger must receive all banner lines");
+        assertTrue(consoleMessages.isEmpty(), "Console sender must NOT be called when logger succeeds");
+        assertTrue(loggerMessages.stream().anyMatch(l -> l.contains("MineBridge v1.4.0")));
+    }
+
+    @Test
+    @DisplayName("Banner falls back to console sender when logger throws an exception")
+    void bannerFallsBackToConsoleSenderWhenLoggerThrows() {
+        List<String> consoleMessages = new ArrayList<>();
+        ConsoleCommandSender consoleMock = (ConsoleCommandSender) Proxy.newProxyInstance(
+                ConsoleCommandSender.class.getClassLoader(),
+                new Class<?>[]{ConsoleCommandSender.class},
+                (proxy, method, args) -> {
+                    if ("sendMessage".equals(method.getName())) {
+                        consoleMessages.add(String.valueOf(args[0]));
+                        return null;
+                    }
+                    return null;
+                });
+
+        Server serverMock = (Server) Proxy.newProxyInstance(
+                Server.class.getClassLoader(),
+                new Class<?>[]{Server.class},
+                (proxy, method, args) -> {
+                    if ("getConsoleSender".equals(method.getName())) {
+                        return consoleMock;
+                    }
+                    return null;
+                });
+
+        // Failing logger
+        java.util.function.Consumer<String> failingLogger = msg -> {
+            throw new RuntimeException("Logger error");
+        };
+
+        boolean displayed = StartupBanner.display(serverMock, failingLogger, "1.4.0", "HYBRID", true);
+
+        assertTrue(displayed, "Banner display must succeed via fallback");
+        assertTrue(StartupBanner.hasBeenDisplayed());
+        assertFalse(consoleMessages.isEmpty(), "Console sender must receive lines via fallback");
+        assertTrue(consoleMessages.stream().anyMatch(l -> l.contains("HYBRID")));
+        assertTrue(consoleMessages.stream().anyMatch(l -> l.contains("Mode:")));
+    }
+
+    @Test
+    @DisplayName("Banner failure does not set AtomicBoolean guard and allows subsequent retry")
+    void bannerFailureDoesNotLockDisplayGuard() {
+        // Both logger and server are null
+        boolean failedDisplay = StartupBanner.display((Server) null, (java.util.function.Consumer<String>) null, "1.4.0", "BOT", true);
+
+        assertFalse(failedDisplay, "Display with no output sinks must return false");
+        assertFalse(StartupBanner.hasBeenDisplayed(), "DISPLAYED guard must NOT be set to true on failure");
+
+        // Subsequent attempt with valid logger succeeds
+        List<String> loggerMessages = new ArrayList<>();
+        boolean retryDisplay = StartupBanner.display(loggerMessages::add, "1.4.0", "BOT", true);
+
+        assertTrue(retryDisplay, "Retry with valid logger must succeed");
+        assertTrue(StartupBanner.hasBeenDisplayed());
+        assertFalse(loggerMessages.isEmpty());
+    }
+
     // --- 2. Startup Banner Content & Formatting ---
 
     @Test
@@ -533,5 +625,32 @@ class StartupBrandingAndUpdateNotificationTest {
         assertEquals(settings.notifications().adminUpdateNotification(), roundtrip.notifications().adminUpdateNotification());
         assertEquals(settings.notifications().adminUpdateNotificationOnJoin(), roundtrip.notifications().adminUpdateNotificationOnJoin());
         assertEquals(settings.startup().banner(), roundtrip.startup().banner());
+    }
+
+    @Test
+    @DisplayName("Configuration startup.banner options: true, false, and missing default")
+    void startupBannerConfigurationOptions() throws Exception {
+        ConfigManager configManager = new ConfigManager((org.bukkit.plugin.Plugin) null);
+
+        // 1. Missing startup.banner defaults to true
+        org.bukkit.configuration.file.YamlConfiguration configMissing = new org.bukkit.configuration.file.YamlConfiguration();
+        configMissing.load(new java.io.StringReader("discord:\n  mode: BOT\n"));
+        ConfigManager.Candidate candidateMissing = configManager.candidateFrom(configMissing, "");
+        assertNotNull(candidateMissing.settings().startup());
+        assertTrue(candidateMissing.settings().startup().banner(), "Missing startup.banner must default to true");
+
+        // 2. Explicit startup.banner: false
+        org.bukkit.configuration.file.YamlConfiguration configFalse = new org.bukkit.configuration.file.YamlConfiguration();
+        configFalse.load(new java.io.StringReader("startup:\n  banner: false\n"));
+        ConfigManager.Candidate candidateFalse = configManager.candidateFrom(configFalse, "");
+        assertNotNull(candidateFalse.settings().startup());
+        assertFalse(candidateFalse.settings().startup().banner(), "Explicit startup.banner: false must evaluate to false");
+
+        // 3. Explicit startup.banner: true
+        org.bukkit.configuration.file.YamlConfiguration configTrue = new org.bukkit.configuration.file.YamlConfiguration();
+        configTrue.load(new java.io.StringReader("startup:\n  banner: true\n"));
+        ConfigManager.Candidate candidateTrue = configManager.candidateFrom(configTrue, "");
+        assertNotNull(candidateTrue.settings().startup());
+        assertTrue(candidateTrue.settings().startup().banner(), "Explicit startup.banner: true must evaluate to true");
     }
 }

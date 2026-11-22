@@ -42,15 +42,33 @@ public final class MineBridgePlugin extends JavaPlugin {
         saveDefaultConfig();
 
         configManager = new ConfigManager(this);
+        ConfigManager.Candidate initialCandidate = null;
+        try {
+            initialCandidate = configManager.loadCandidate();
+            if (initialCandidate != null && initialCandidate.valid() && initialCandidate.settings() != null) {
+                configManager.commit(initialCandidate);
+            }
+        } catch (Throwable t) {
+            getLogger().warning("Could not pre-load configuration: " + t.getMessage());
+        }
+
         chatMetadataService = new ChatMetadataService(msg -> getLogger().warning(msg));
         luckPermsHook = chatMetadataService.getLuckPermsHook();
 
-        if (configManager.startupBannerEnabled()) {
+        boolean bannerEnabled = (initialCandidate != null && initialCandidate.settings() != null && initialCandidate.settings().startup() != null)
+                ? initialCandidate.settings().startup().banner()
+                : configManager.startupBannerEnabled();
+
+        String bannerMode = (initialCandidate != null && initialCandidate.settings() != null && initialCandidate.settings().mode() != null)
+                ? initialCandidate.settings().mode().name()
+                : configManager.mode().name();
+
+        if (bannerEnabled) {
             StartupBanner.display(
                     getServer(),
                     msg -> getLogger().info(msg),
                     getDescription().getVersion(),
-                    configManager.mode().name(),
+                    bannerMode,
                     true);
         }
 
