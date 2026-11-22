@@ -1,5 +1,5 @@
 # ==============================================================================
-# MineBridge — Advanced Configuration & Technical Settings (v1.4.0)
+# MineBridge — Advanced Configuration & Technical Settings (v1.4.1)
 # Documentation: https://github.com/aridrochatterjee/MineBridge
 # ==============================================================================
 
@@ -36,7 +36,7 @@ webhook:
   # Webhook display username. Supports: {player}, {nickname}, {server}, {prefix}, {suffix}, {world}, {world_alias}, {uuid}
   username: "{prefix}{player}"
   # Webhook author avatar URL. Supports: {player}, {uuid}, {server}
-  avatar-url: "https://mc-heads.net/avatar/{uuid}/100"
+  avatar-url: "https://crafatar.com/avatars/{uuid}?overlay"
 
 hybrid:
   # Transport for event notifications in HYBRID mode: WEBHOOK (default) or BOT.

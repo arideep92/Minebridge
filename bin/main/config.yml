@@ -1,5 +1,5 @@
 # ==============================================================================
-# MineBridge — Main Configuration (v1.4.0)
+# MineBridge — Main Configuration (v1.4.1)
 # Documentation: https://github.com/aridrochatterjee/MineBridge
 # ==============================================================================
 # MineBridge connects Minecraft and Discord with three supported integration modes:
@@ -45,15 +45,6 @@ server:
 # Update Checker: Check for newer releases on Modrinth once during startup.
 update-checker:
   enabled: true
-
-# In-game update notifications for administrators
-notifications:
-  admin-update-notification: true
-  admin-update-notification-on-join: true
-
-# Startup console branding
-startup:
-  banner: true
 
 # In-game update notifications for administrators
 notifications:

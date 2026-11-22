@@ -1,5 +1,5 @@
 name: MineBridge
-version: 1.4.0
+version: 1.4.1
 main: com.minebridge.MineBridgePlugin
 api-version: '1.20'
 description: Minecraft and Discord integration with chat and event announcements
