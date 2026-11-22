@@ -11,6 +11,7 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DiscordEmbedFactoryTest {
@@ -20,24 +21,31 @@ class DiscordEmbedFactoryTest {
         MessageEmbed join = DiscordEmbedFactory.playerJoined(
                 "Alex", "Alex joined the Minecraft server.", false,
                 DiscordEmbedFactory.DEFAULT_FOOTER);
-        assertEquals("PLAYER JOINED", join.getTitle());
-        assertEquals("Alex joined the Minecraft server.", join.getDescription());
+        assertEquals("JOIN", join.getTitle());
+        assertEquals("Alex", join.getAuthor().getName());
+        assertEquals("https://mc-heads.net/avatar/Alex/64", join.getAuthor().getIconUrl());
+        assertNull(join.getDescription());
         assertEquals(DiscordEmbedFactory.JOIN_COLOR, join.getColor().getRGB() & 0xFFFFFF);
-        assertEquals("Online", join.getFields().get(1).getValue());
+        assertTrue(join.getFields().isEmpty());
 
         MessageEmbed leave = DiscordEmbedFactory.playerLeft(
                 "Alex", "Alex left the Minecraft server.", DiscordEmbedFactory.DEFAULT_FOOTER);
-        assertEquals("PLAYER LEFT", leave.getTitle());
-        assertEquals("Offline", leave.getFields().get(1).getValue());
+        assertEquals("LEAVE", leave.getTitle());
+        assertEquals("Alex", leave.getAuthor().getName());
+        assertEquals("https://mc-heads.net/avatar/Alex/64", leave.getAuthor().getIconUrl());
         assertEquals(DiscordEmbedFactory.LEAVE_COLOR, leave.getColor().getRGB() & 0xFFFFFF);
+        assertTrue(leave.getFields().isEmpty());
 
         MessageEmbed firstJoin = DiscordEmbedFactory.playerJoined(
                 "Alex", "Alex joined for the first time!", true,
                 DiscordEmbedFactory.DEFAULT_FOOTER);
-        assertEquals("WELCOME TO THE SERVER", firstJoin.getTitle());
+        assertEquals("FIRST JOIN", firstJoin.getTitle());
+        assertEquals("Alex", firstJoin.getAuthor().getName());
+        assertEquals("Alex joined for the first time!", firstJoin.getDescription());
         assertEquals(
                 DiscordEmbedFactory.FIRST_JOIN_COLOR,
                 firstJoin.getColor().getRGB() & 0xFFFFFF);
+        assertTrue(firstJoin.getFields().isEmpty());
     }
 
     @Test
@@ -45,19 +53,20 @@ class DiscordEmbedFactoryTest {
         AdvancementContext regular = new AdvancementContext(
                 "Aridro", "Stone Age", "Mine stone", AdvancementCategory.STORY, false);
         MessageEmbed regularEmbed = DiscordEmbedFactory.advancement(
-                regular, "ADVANCEMENT UNLOCKED",
-                "Aridro has unlocked Stone Age.", DiscordEmbedFactory.ADVANCEMENT_COLOR,
+                regular, "ADVANCEMENT",
+                "Aridro has unlocked Stone Age.", 0,
                 DiscordEmbedFactory.DEFAULT_FOOTER);
-        assertEquals("ADVANCEMENT UNLOCKED", regularEmbed.getTitle());
-        assertEquals("Story", regularEmbed.getFields().get(2).getValue());
-        assertEquals(3, regularEmbed.getFields().size());
+        assertEquals("ADVANCEMENT", regularEmbed.getTitle());
+        assertEquals("Aridro", regularEmbed.getAuthor().getName());
+        assertEquals("Stone Age", regularEmbed.getDescription());
+        assertTrue(regularEmbed.getFields().isEmpty());
         assertEquals(DiscordEmbedFactory.ADVANCEMENT_COLOR,
                 regularEmbed.getColor().getRGB() & 0xFFFFFF);
 
         AdvancementContext challenge = new AdvancementContext(
                 "Aridro", "Cover Me in Debris", "", AdvancementCategory.NETHER, true);
         MessageEmbed challengeEmbed = DiscordEmbedFactory.advancement(
-                "CHALLENGE COMPLETED",
+                "CHALLENGE",
                 "Aridro has completed Cover Me in Debris!",
                 challenge.player(),
                 challenge.title(),
@@ -66,8 +75,12 @@ class DiscordEmbedFactoryTest {
                 DiscordEmbedFactory.CHALLENGE_COLOR,
                 DiscordEmbedFactory.DEFAULT_FOOTER,
                 Instant.now());
-        assertEquals("CHALLENGE COMPLETED", challengeEmbed.getTitle());
-        assertEquals("Challenge", challengeEmbed.getFields().get(3).getValue());
+        assertEquals("CHALLENGE", challengeEmbed.getTitle());
+        assertEquals("Aridro", challengeEmbed.getAuthor().getName());
+        assertEquals("Cover Me in Debris", challengeEmbed.getDescription());
+        assertTrue(challengeEmbed.getFields().isEmpty());
+        assertEquals(DiscordEmbedFactory.CHALLENGE_COLOR,
+                challengeEmbed.getColor().getRGB() & 0xFFFFFF);
     }
 
     @Test
@@ -75,27 +88,51 @@ class DiscordEmbedFactoryTest {
         DeathContext pvp = new DeathContext(
                 "Alex", "Zombie", "entity attack", DeathCategory.MOB_KILL);
         MessageEmbed pvpEmbed = DiscordEmbedFactory.death(
-                "PLAYER DEATH",
+                "DEATH",
                 "Alex was slain by Zombie.",
                 pvp,
                 DiscordEmbedFactory.DEATH_COLOR,
                 DiscordEmbedFactory.DEFAULT_FOOTER);
-        assertEquals("PLAYER DEATH", pvpEmbed.getTitle());
-        assertEquals("Zombie", pvpEmbed.getFields().get(1).getValue());
+        assertEquals("DEATH", pvpEmbed.getTitle());
+        assertEquals("Alex", pvpEmbed.getAuthor().getName());
+        assertEquals("Zombie", pvpEmbed.getFields().get(0).getValue());
+        assertEquals(1, pvpEmbed.getFields().size());
         assertEquals(DiscordEmbedFactory.DEATH_COLOR,
                 pvpEmbed.getColor().getRGB() & 0xFFFFFF);
 
         DeathContext environmental = new DeathContext(
                 "Alex", "", "fall damage", DeathCategory.FALL);
         MessageEmbed environmentEmbed = DiscordEmbedFactory.death(
-                "PLAYER DEATH", "Alex fell to their death.", environmental,
+                "DEATH", "Alex fell to their death.", environmental,
                 DiscordEmbedFactory.DEATH_COLOR, DiscordEmbedFactory.DEFAULT_FOOTER);
-        assertEquals(2, environmentEmbed.getFields().size());
+        assertEquals(1, environmentEmbed.getFields().size());
+        assertEquals("Cause", environmentEmbed.getFields().get(0).getName());
+        assertEquals("fall damage", environmentEmbed.getFields().get(0).getValue());
         assertTrue(environmentEmbed.getFields().stream()
                 .noneMatch(field -> field.getName().equals("Killer")));
+        assertTrue(environmentEmbed.getFields().stream()
+                .noneMatch(field -> field.getName().equals("Victim")));
         assertNotNull(environmentEmbed.getTimestamp());
         assertEquals(DiscordEmbedFactory.DEFAULT_FOOTER,
                 environmentEmbed.getFooter().getText());
+    }
+
+    @Test
+    void createsServerOnlineAndOfflineEmbeds() {
+        MessageEmbed start = DiscordEmbedFactory.serverStarted("MineBridge", "https://icon.invalid");
+        assertEquals("SERVER ONLINE", start.getTitle());
+        assertEquals(DiscordEmbedFactory.SERVER_ONLINE_COLOR, start.getColor().getRGB() & 0xFFFFFF);
+        assertNotNull(start.getTimestamp());
+        assertEquals("MineBridge", start.getFooter().getText());
+        assertEquals("https://icon.invalid", start.getFooter().getIconUrl());
+        assertTrue(start.getFields().isEmpty());
+
+        MessageEmbed stop = DiscordEmbedFactory.serverStopped("MineBridge", null);
+        assertEquals("SERVER OFFLINE", stop.getTitle());
+        assertEquals(DiscordEmbedFactory.SERVER_OFFLINE_COLOR, stop.getColor().getRGB() & 0xFFFFFF);
+        assertNotNull(stop.getTimestamp());
+        assertEquals("MineBridge", stop.getFooter().getText());
+        assertTrue(stop.getFields().isEmpty());
     }
 
     @Test
@@ -105,8 +142,8 @@ class DiscordEmbedFactoryTest {
                 DiscordEmbedFactory.discordText("@everyone *Alex* joined."),
                 false,
                 DiscordEmbedFactory.DEFAULT_FOOTER);
-        assertTrue(embed.getFields().get(0).getValue().contains("@\u200Beveryone"));
-        assertTrue(embed.getFields().get(0).getValue().contains("\\*Alex\\*"));
+        assertTrue(embed.getAuthor().getName().contains("@\u200Beveryone"));
+        assertTrue(embed.getAuthor().getName().contains("\\*Alex\\*"));
 
         var data = DiscordEmbedFactory.createMessageData(embed);
         assertEquals("", data.getContent());

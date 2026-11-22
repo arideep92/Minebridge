@@ -43,6 +43,39 @@ class DiscordEventsPolicyTest {
                 false));
     }
 
+    @Test
+    void independentlyConfiguresServerOnlineAndOfflineEvents() {
+        DiscordEventsSettings serverStartOnly = new DiscordEventsSettings(
+                true, true, "footer",
+                true, "", true, true, true,
+                true, "", Map.of(), true,
+                true, "", true, true, true,
+                true, "", true, false);
+
+        assertTrue(DiscordEventsPolicy.serverEventEnabled(serverStartOnly, true));
+        assertFalse(DiscordEventsPolicy.serverEventEnabled(serverStartOnly, false));
+
+        DiscordEventsSettings serverStopOnly = new DiscordEventsSettings(
+                true, true, "footer",
+                true, "", true, true, true,
+                true, "", Map.of(), true,
+                true, "", true, true, true,
+                true, "", false, true);
+
+        assertFalse(DiscordEventsPolicy.serverEventEnabled(serverStopOnly, true));
+        assertTrue(DiscordEventsPolicy.serverEventEnabled(serverStopOnly, false));
+
+        DiscordEventsSettings disabled = new DiscordEventsSettings(
+                true, true, "footer",
+                true, "", true, true, true,
+                true, "", Map.of(), true,
+                true, "", true, true, true,
+                false, "", true, true);
+
+        assertFalse(DiscordEventsPolicy.serverEventEnabled(disabled, true));
+        assertFalse(DiscordEventsPolicy.serverEventEnabled(disabled, false));
+    }
+
     private static DiscordEventsSettings settings(
             boolean enabled,
             boolean embeds,

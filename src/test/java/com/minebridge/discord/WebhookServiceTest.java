@@ -179,24 +179,15 @@ class WebhookServiceTest {
         assertEquals(1, embeds.length());
 
         DataObject embedNode = embeds.getObject(0);
-        assertEquals("PLAYER JOINED", embedNode.getString("title"));
-        assertEquals("Alex joined the server.", embedNode.getString("description"));
+        assertEquals("JOIN", embedNode.getString("title"));
+        assertEquals("Alex", embedNode.getObject("author").getString("name"));
+        assertEquals("https://mc-heads.net/avatar/Alex/64", embedNode.getObject("author").getString("icon_url"));
         assertEquals(DiscordEmbedFactory.JOIN_COLOR, embedNode.getInt("color"));
+        assertFalse(embedNode.hasKey("fields"));
 
         DataObject footer = embedNode.getObject("footer");
         assertEquals("MineBridge | SMP", footer.getString("text"));
         assertEquals("https://icon.invalid", footer.getString("icon_url"));
-
-        DataArray fields = embedNode.getArray("fields");
-        assertEquals(2, fields.length());
-        DataObject field1 = fields.getObject(0);
-        assertEquals("Player", field1.getString("name"));
-        assertEquals("Alex", field1.getString("value"));
-        assertTrue(field1.getBoolean("inline"));
-
-        DataObject field2 = fields.getObject(1);
-        assertEquals("Status", field2.getString("name"));
-        assertEquals("Online", field2.getString("value"));
     }
 
     @Test
@@ -395,6 +386,43 @@ class WebhookServiceTest {
             assertFalse(log.contains("test-secret-token_ABC123"),
                     "Log contained unmasked secret token: " + log);
         }
+    }
+
+    @Test
+    void testSanitizeWebhookUsername() {
+        assertEquals("Minecraft", WebhookService.sanitizeWebhookUsername(null));
+        assertEquals("Minecraft", WebhookService.sanitizeWebhookUsername("   "));
+        assertEquals("Player", WebhookService.sanitizeWebhookUsername("clyde"));
+        assertEquals("Player", WebhookService.sanitizeWebhookUsername("CLYDE"));
+        assertEquals("Player", WebhookService.sanitizeWebhookUsername("Clyde"));
+        assertEquals("Steve @\u200Beveryone", WebhookService.sanitizeWebhookUsername("Steve @everyone"));
+        assertEquals("Steve @\u200Bhere", WebhookService.sanitizeWebhookUsername("Steve @here"));
+
+        String longName = "A".repeat(100);
+        String sanitized = WebhookService.sanitizeWebhookUsername(longName);
+        assertEquals(80, sanitized.length());
+    }
+
+    @Test
+    void testSanitizeAvatarUrl() {
+        assertEquals("", WebhookService.sanitizeAvatarUrl(null));
+        assertEquals("", WebhookService.sanitizeAvatarUrl(""));
+        assertEquals("", WebhookService.sanitizeAvatarUrl("none"));
+        assertEquals("", WebhookService.sanitizeAvatarUrl("disabled"));
+        assertEquals("", WebhookService.sanitizeAvatarUrl("ftp://invalid.com/icon.png"));
+        assertEquals("https://example.com/avatar.png",
+                WebhookService.sanitizeAvatarUrl("https://example.com/avatar.png"));
+    }
+
+    @Test
+    void testLongMessageSplittingInSend() {
+        ConfigManager config = createConfig(VALID_WEBHOOK_URL, "Server");
+        WebhookService service = new WebhookService(config, null, null, null);
+
+        String longMsg = "A".repeat(3500);
+        assertTrue(service.send("Alex", "", longMsg));
+        // 3500 chars should be split into 2 segments enqueued
+        assertEquals(2, service.getQueueSize());
     }
 
     @Test

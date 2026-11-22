@@ -42,11 +42,49 @@ public final class DiscordEventNotifier {
             if (webhook != null) {
                 webhook.sendEmbed(embed);
             }
+        } else if (current.mode() == IntegrationMode.HYBRID) {
+            if (current.hybrid().eventDelivery() == IntegrationMode.BOT) {
+                if (discord != null) {
+                    discord.sendEventEmbed(channelId, embed);
+                }
+            } else {
+                if (webhook != null) {
+                    webhook.sendEmbed(embed);
+                }
+            }
         } else {
             if (discord != null) {
                 discord.sendEventEmbed(channelId, embed);
             }
         }
+    }
+
+    public void sendServerStart() {
+        ConfigManager.Settings current = config != null ? config.currentSettings() : null;
+        if (current == null) {
+            return;
+        }
+        ConfigManager.DiscordEventsSettings settings = current.discordEvents();
+        if (!DiscordEventsPolicy.serverEventEnabled(settings, true)) {
+            return;
+        }
+        String channelId = settings.serverEventsChannelId().isBlank()
+                ? current.channelId() : settings.serverEventsChannelId();
+        send(channelId, DiscordEmbedFactory.serverStarted(footer(), footerIconUrl()));
+    }
+
+    public void sendServerStop() {
+        ConfigManager.Settings current = config != null ? config.currentSettings() : null;
+        if (current == null) {
+            return;
+        }
+        ConfigManager.DiscordEventsSettings settings = current.discordEvents();
+        if (!DiscordEventsPolicy.serverEventEnabled(settings, false)) {
+            return;
+        }
+        String channelId = settings.serverEventsChannelId().isBlank()
+                ? current.channelId() : settings.serverEventsChannelId();
+        send(channelId, DiscordEmbedFactory.serverStopped(footer(), footerIconUrl()));
     }
 
     public String footer() {

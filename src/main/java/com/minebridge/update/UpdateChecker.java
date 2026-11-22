@@ -294,7 +294,7 @@ public final class UpdateChecker {
             ExecutorService executor,
             Consumer<String> infoLogger,
             Consumer<String> warningLogger) {
-        this.installedVersion = installedVersion != null ? installedVersion.trim() : "1.3.2";
+        this.installedVersion = installedVersion != null ? installedVersion.trim() : "1.4.0";
         this.enabled = enabled;
         this.infoLogger = infoLogger != null ? infoLogger : msg -> {};
         this.warningLogger = warningLogger != null ? warningLogger : msg -> {};

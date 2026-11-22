@@ -1,0 +1,68 @@
+# ==============================================================================
+# MineBridge — Advanced Configuration & Technical Settings (v1.4.0)
+# Documentation: https://github.com/aridrochatterjee/MineBridge
+# ==============================================================================
+
+chat-routing:
+  # Cross-world chat relay behavior:
+  #   - GLOBAL: Relay public chat server-wide (Default).
+  #   - PER_WORLD: Relay public chat delivered to players in sender's world.
+  #   - FILTERED: Only relay chat originating from worlds listed in enabled-worlds.
+  cross-world:
+    mode: GLOBAL
+    enabled-worlds: []
+
+formatting:
+  # Minecraft -> Discord formatting translation (&/§ codes to Discord Markdown)
+  minecraft-to-discord:
+    format-conversion: true
+    allow-bold: true            # §l / &l -> **bold**
+    allow-italic: true          # §o / &o -> *italic*
+    allow-underline: true       # §n / &n -> __underline__
+    allow-strikethrough: true   # §m / &m -> ~~strikethrough~~
+    allow-obfuscated: true      # §k / &k -> ||spoiler||
+
+  # Discord -> Minecraft formatting translation (Discord Markdown to § codes)
+  discord-to-minecraft:
+    format-conversion: true
+    allow-bold: true            # **bold** -> §l
+    allow-italic: true          # *italic* / _italic_ -> §o
+    allow-underline: true       # __underline__ -> §n
+    allow-strikethrough: true   # ~~strikethrough~~ -> §m
+    allow-code: true            # `code` -> §7
+    show-attachments: true      # Relays [filename] for uploads
+
+webhook:
+  # Webhook display username. Supports: {player}, {nickname}, {server}, {prefix}, {suffix}, {world}, {world_alias}, {uuid}
+  username: "{prefix}{player}"
+  # Webhook author avatar URL. Supports: {player}, {uuid}, {server}
+  avatar-url: "https://mc-heads.net/avatar/{uuid}/100"
+
+hybrid:
+  # Transport for event notifications in HYBRID mode: WEBHOOK (default) or BOT.
+  event-delivery: WEBHOOK
+
+embeds:
+  footer:
+    # Global embed footer text override. Supports: {server}
+    text: ""
+    # Global embed footer icon URL
+    icon-url: ""
+    # Default footer text when empty
+    default-text: "MineBridge | Minecraft Events"
+
+integrations:
+  luckperms:
+    enabled: true
+  vault:
+    enabled: true
+  essentials:
+    enabled: true
+  multiverse:
+    enabled: true
+  placeholderapi:
+    enabled: true
+
+# Internal migration version tracking (Do not modify manually)
+migration:
+  version: 1

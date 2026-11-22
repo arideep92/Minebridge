@@ -224,7 +224,7 @@ class DiscordDeathNotifierTest {
         assertEquals(1, recordingFactory.recordedBodies.size());
         DataObject json = DataObject.fromJson(recordingFactory.recordedBodies.get(0));
         DataObject embed = json.getArray("embeds").getObject(0);
-        assertEquals("☠ Player death", embed.getString("title"));
+        assertEquals("DEATH", embed.getString("title"));
         assertEquals("Cause: hit the ground too hard", embed.getString("description"));
     }
 }

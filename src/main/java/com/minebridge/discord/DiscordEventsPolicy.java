@@ -42,4 +42,12 @@ public final class DiscordEventsPolicy {
                 && settings.deathsEnabled()
                 && categoryEnabled;
     }
+
+    public static boolean serverEventEnabled(
+            DiscordEventsSettings settings, boolean start) {
+        return settings.enabled()
+                && settings.embedsEnabled()
+                && settings.serverEventsEnabled()
+                && (start ? settings.serverStartEnabled() : settings.serverStopEnabled());
+    }
 }

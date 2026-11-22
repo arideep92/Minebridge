@@ -107,6 +107,7 @@ public final class WebhookService {
     public synchronized void stop() {
         stopping = true;
         state = "STOPPED";
+        processOutgoing();
         outgoingQueue.close();
         if (backgroundExecutor != null) {
             backgroundExecutor.shutdownNow();
@@ -131,6 +132,39 @@ public final class WebhookService {
         return send(username, avatarUrl, content);
     }
 
+    public static String sanitizeWebhookUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return "Minecraft";
+        }
+        String sanitized = username.trim()
+                .replace("@everyone", "@\u200Beveryone")
+                .replace("@here", "@\u200Bhere");
+        if ("clyde".equalsIgnoreCase(sanitized)) {
+            sanitized = "Player";
+        }
+        if (sanitized.length() > 80) {
+            sanitized = sanitized.substring(0, 80).trim();
+        }
+        return sanitized.isEmpty() ? "Minecraft" : sanitized;
+    }
+
+    public static String sanitizeAvatarUrl(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isBlank()) {
+            return "";
+        }
+        String trimmed = avatarUrl.trim();
+        if ("none".equalsIgnoreCase(trimmed) || "disabled".equalsIgnoreCase(trimmed)) {
+            return "";
+        }
+        if (trimmed.length() > 2048) {
+            return "";
+        }
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            return "";
+        }
+        return trimmed;
+    }
+
     public boolean send(String username, String avatarUrl, String content) {
         if (stopping) {
             outgoingDropped.incrementAndGet();
@@ -145,14 +179,28 @@ public final class WebhookService {
             return false;
         }
 
-        String payload = buildPayload(
-                content,
-                username,
-                avatarUrl,
-                List.of(),
-                getServerName(),
-                getEmbedFooterSettings());
-        return enqueuePayload(payload);
+        String safeUsername = sanitizeWebhookUsername(username);
+        String safeAvatar = sanitizeAvatarUrl(avatarUrl);
+
+        List<String> segments = WebhookMessageSplitter.split(content);
+        if (segments.isEmpty()) {
+            return false;
+        }
+
+        boolean allEnqueued = true;
+        for (String segment : segments) {
+            String payload = buildPayload(
+                    segment,
+                    safeUsername,
+                    safeAvatar,
+                    List.of(),
+                    getServerName(),
+                    getEmbedFooterSettings());
+            if (!enqueuePayload(payload)) {
+                allEnqueued = false;
+            }
+        }
+        return allEnqueued;
     }
 
     public boolean sendEmbed(MessageEmbed embed) {
@@ -372,10 +420,11 @@ public final class WebhookService {
         if (username != null && !username.isBlank()) {
             String resolvedUsername = serverName != null && !serverName.isBlank()
                     ? username.replace("{server}", serverName) : username;
-            root.put("username", resolvedUsername);
+            root.put("username", sanitizeWebhookUsername(resolvedUsername));
         }
-        if (avatarUrl != null && !avatarUrl.isBlank()) {
-            root.put("avatar_url", avatarUrl);
+        String safeAvatar = sanitizeAvatarUrl(avatarUrl);
+        if (!safeAvatar.isEmpty()) {
+            root.put("avatar_url", safeAvatar);
         }
 
         if (embeds != null && !embeds.isEmpty()) {

@@ -1,0 +1,58 @@
+# ==============================================================================
+# MineBridge — Message Templates & Customization (v1.4.0)
+# Documentation: https://github.com/aridrochatterjee/MineBridge
+# ==============================================================================
+# All user-facing chat, player, death, and advancement message templates.
+# Supports Minecraft color codes (& / §), Discord Markdown (**bold**, *italic*),
+# and context-specific placeholders.
+# ==============================================================================
+
+chat:
+  # Outgoing Minecraft-to-Discord chat template.
+  # Supported: {player}, {nickname}, {display_name}, {message}, {timestamp}, {server}, {prefix}, {suffix}, {world}, {world_alias}, {uuid}
+  minecraft-to-discord: "{prefix}**{player}**{suffix}: {message}"
+
+  # Incoming Discord-to-Minecraft chat template (BOT and HYBRID modes).
+  # Supported: {player}, {nickname}, {display_name}, {username}, {channel}, {message}, {timestamp}, {server}, {prefix}, {suffix}
+  discord-to-minecraft: "&9[Discord] &f{player}: {message}"
+
+player:
+  # Join message template (for chat and simple alerts).
+  # Supported: {player}, {nickname}, {display_name}, {timestamp}, {server}, {prefix}, {suffix}, {world}, {world_alias}
+  join: "🟢 **{player}** joined the server."
+
+  # Leave message template.
+  # Supported: {player}, {nickname}, {display_name}, {timestamp}, {server}, {prefix}, {suffix}, {world}, {world_alias}
+  leave: "🔴 **{player}** left the server."
+
+  # First-join welcome message template.
+  # Supported: {player}, {nickname}, {display_name}, {timestamp}, {server}, {prefix}, {suffix}, {world}, {world_alias}
+  first-join: "🌟 Welcome **{player}** to the server for the first time!"
+
+  # Server status template (/minebridge server).
+  # Supported: {online}, {max}, {server}
+  server-status: "&7Server &8| &a{online}&7/&f{max} players online"
+
+  # Online player list template (/minebridge players).
+  # Supported: {online}, {max}, {players}, {server}
+  player-list: "&7Online players (&f{online}&7/&f{max}&7): {players}"
+
+# In-game death broadcast messages (when broadcast is enabled).
+# Supported placeholders: {victim}, {killer}, {cause}, {category}, {server}, {prefix}
+deaths:
+  player-kill: "&c☠ {victim} was slain by {killer}"
+  mob-kill: "&c☠ {victim} was slain by {killer}"
+  fall: "&c☠ {victim} fell to their death"
+  lava: "&c☠ {victim} tried to swim in lava"
+  fire: "&c☠ {victim} burned to death"
+  drowning: "&c☠ {victim} drowned"
+  void: "&c☠ {victim} fell out of the world"
+  explosion: "&c☠ {victim} died in an explosion"
+  environmental: "&c☠ {victim} died from {cause}"
+  other: "&c☠ {victim} died"
+
+# In-game advancement messages.
+# Supported placeholders: {player}, {title}, {description}, {category}, {challenge}, {server}, {prefix}
+advancements:
+  normal: "&a✦ {player} has made the advancement [{title}]!"
+  challenge: "&6🏆 {player} has completed the challenge [{title}]!"

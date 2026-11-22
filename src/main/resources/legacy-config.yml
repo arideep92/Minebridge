@@ -1,0 +1,149 @@
+# ==============================================================================
+# MineBridge Legacy Combined Configuration (Reference Template)
+# ==============================================================================
+discord:
+  mode: BOT
+  bot-token: ""
+  channel-id: ""
+  webhook:
+    url: ""
+    username: "{prefix}{player}"
+    avatar-url: "https://mc-heads.net/avatar/{uuid}/100"
+  hybrid:
+    event-delivery: WEBHOOK
+  embed:
+    footer:
+      text: ""
+      icon-url: ""
+
+server:
+  name: "Minecraft Server"
+
+chat:
+  cross-world:
+    mode: GLOBAL
+    enabled-worlds: []
+  minecraft-to-discord:
+    format-conversion: true
+    allow-bold: true
+    allow-italic: true
+    allow-underline: true
+    allow-strikethrough: true
+    allow-obfuscated: true
+  discord-to-minecraft:
+    format-conversion: true
+    allow-bold: true
+    allow-italic: true
+    allow-underline: true
+    allow-strikethrough: true
+    allow-code: true
+    show-attachments: true
+
+messages:
+  minecraft-to-discord: "{prefix}**{player}**{suffix}: {message}"
+  discord-to-minecraft: "&9[Discord] &f{player}: {message}"
+  player-join: "🟢 **{player}** joined the server."
+  player-leave: "🔴 **{player}** left the server."
+  server-status: "&7Server &8| &a{online}&7/&f{max} players online"
+  player-list: "&7Online players (&f{online}&7/&f{max}&7): {players}"
+
+features:
+  chat-relay: true
+  join-leave-notifications: true
+  server-status: true
+  player-list: true
+
+update-checker:
+  enabled: true
+
+death-messages:
+  enabled: true
+  minecraft:
+    enabled: true
+    broadcast: true
+  discord:
+    enabled: true
+    channel-id: ""
+    embed: true
+    title: "☠ Player death"
+    description: "{message}\nCategory: {category}\nCause: {cause}"
+    color: "#D32F2F"
+  categories:
+    player-kill: true
+    mob-kill: true
+    fall: true
+    lava: true
+    fire: true
+    drowning: true
+    void: true
+    explosion: true
+    environmental: true
+    other: true
+  messages:
+    player-kill: "&c☠ {victim} was slain by {killer}"
+    mob-kill: "&c☠ {victim} was slain by {killer}"
+    fall: "&c☠ {victim} fell to their death"
+    lava: "&c☠ {victim} tried to swim in lava"
+    fire: "&c☠ {victim} burned to death"
+    drowning: "&c☠ {victim} drowned"
+    void: "&c☠ {victim} fell out of the world"
+    explosion: "&c☠ {victim} died in an explosion"
+    environmental: "&c☠ {victim} died from {cause}"
+    other: "&c☠ {victim} died"
+
+achievements:
+  enabled: true
+  minecraft:
+    enabled: true
+  discord:
+    enabled: true
+    channel-id: ""
+    title: "ADVANCEMENT UNLOCKED"
+    description: "{player} has unlocked {title}.\n{description}"
+    challenge-title: "CHALLENGE COMPLETED"
+    challenge-description: "{player} has completed {title}!\n{description}"
+    color: "#2196F3"
+  challenges:
+    enabled: true
+  categories:
+    story: true
+    nether: true
+    end: true
+    adventure: true
+    husbandry: true
+    other: true
+  messages:
+    normal: "&a✦ {player} has made the advancement [{title}]!"
+    challenge: "&6🏆 {player} has completed the challenge [{title}]!"
+
+discord-events:
+  enabled: true
+  embeds:
+    enabled: true
+    footer: "MineBridge | Minecraft Events"
+  player-events:
+    enabled: true
+    channel-id: ""
+    join: true
+    leave: true
+    first-join: true
+  achievements:
+    enabled: true
+    channel-id: ""
+    story: true
+    nether: true
+    end: true
+    adventure: true
+    husbandry: true
+    challenges: true
+  deaths:
+    enabled: true
+    channel-id: ""
+    player-kill: true
+    mob-kill: true
+    environmental: true
+  server-events:
+    enabled: false
+    channel-id: ""
+    start: true
+    stop: true

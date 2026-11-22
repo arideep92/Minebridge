@@ -3,7 +3,7 @@
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Aridro%2FMineBridge-blue?logo=github)](https://github.com/Aridro/MineBridge)
 [![Modrinth Download](https://img.shields.io/badge/Modrinth-MineBridge-00AF5C?logo=modrinth)](https://modrinth.com/plugin/minebridge)
 
-MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for Spigot and Paper servers. It connects your Minecraft server and Discord community with two distinct integration modes: **Bot Mode** and **Webhook Mode**.
+MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for Spigot and Paper servers. It connects your Minecraft server and Discord community with three distinct integration modes: **Bot Mode**, **Webhook Mode**, and **Hybrid Mode**.
 
 - **Repository**: [https://github.com/Aridro/MineBridge](https://github.com/Aridro/MineBridge)
 - **Modrinth Downloads**: [https://modrinth.com/plugin/minebridge](https://modrinth.com/plugin/minebridge)
@@ -12,9 +12,20 @@ MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for
 
 ## Features
 
-- **Dual Integration Modes**:
+- **Three Integration Modes**:
   - **BOT Mode (Default)**: Bidirectional chat synchronization (Minecraft ↔ Discord) and outbound event embeds using JDA 5.
   - **WEBHOOK Mode**: Lightweight one-way outbound delivery (Minecraft → Discord) via asynchronous HTTP webhooks without requiring a bot account, bot token, or gateway connection.
+  - **HYBRID Mode**: The best of both worlds. Outbound Minecraft chat is delivered via Webhooks with player skin heads and dynamic identities, while inbound Discord chat and commands are received via the Discord Bot gateway. Event notifications follow exactly one configured transport path (`WEBHOOK` default, or `BOT`).
+- **Directional Transport Architecture**:
+  - Clean separation of outbound delivery and inbound reception prevents duplicate messages and infinite relay loops.
+  - Independent failure resilience: Webhook delivery continues if the Discord bot gateway disconnects; inbound bot relay continues if the webhook URL encounters rate limits or errors.
+  - Zero automatic transport failover that risks duplicate messages.
+- **DiscordSRV-Inspired Chat Integration & Webhook Redesign**:
+  - **Bidirectional Markdown Translation**: Translates Minecraft formatting codes (`&`, `§`, hex) into Discord Markdown (`**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `||spoiler||`), and translates Discord Markdown into Minecraft chat codes. Raw `§` characters from Discord users are stripped to prevent color injection or rank spoofing.
+  - **Skin Avatar Resolution (`SkinAvatarService`)**: Asynchronous, non-blocking player skin head avatar resolution with UUID support (`{uuid}`) and a bounded in-memory TTL cache (60m TTL, max 2000 entries).
+  - **Long Webhook Message Splitting (`WebhookMessageSplitter`)**: Splits messages exceeding 2000 characters along natural line and word boundaries while preserving formatting styles across segment boundaries and preventing broken UTF-16 surrogate pairs / emojis.
+  - **Webhook Identity & Payload Sanitization**: Enforces 1–80 char usernames, defuses mass mentions (`@everyone`, `@here`), prevents disallowed names ("clyde"), and validates avatar URLs.
+  - **Discord Attachments & Inbound Polish**: Relays readable file upload links (e.g. `[image.png]`) from Discord into Minecraft, with expanded placeholders (`{channel}`, `{nickname}`, `{uuid}`).
 - **Fail-Safe Startup & Lifecycle**:
   - Automatically generates a well-commented `config.yml` on first startup if missing.
   - Never disables the plugin on missing or empty Discord tokens.
@@ -73,18 +84,18 @@ MineBridge is a lightweight, reliable Minecraft–Discord integration plugin for
 
 ### Download or Build
 
-1. Download the latest `MineBridge-1.3.2.jar` release from [Modrinth](https://modrinth.com/plugin/minebridge) or [GitHub Releases](https://github.com/Aridro/MineBridge/releases).
+1. Download the latest `MineBridge-1.4.0.jar` release from [Modrinth](https://modrinth.com/plugin/minebridge) or [GitHub Releases](https://github.com/Aridro/MineBridge/releases).
 2. Alternatively, compile from source:
    ```sh
    ./gradlew shadowJar
    ```
-   The shaded JAR will be created at `build/libs/MineBridge-1.3.2.jar`.
+   The shaded JAR will be created at `build/libs/MineBridge-1.4.0.jar`.
 
 ### Installation
 
-1. Place `MineBridge-1.3.2.jar` into your server's `plugins/` directory.
+1. Place `MineBridge-1.4.0.jar` into your server's `plugins/` directory.
 2. Start the server. MineBridge will automatically generate the default `plugins/MineBridge/config.yml` on first boot.
-3. Configure either **BOT Mode** or **WEBHOOK Mode** as described in the guides below.
+3. Configure **BOT Mode**, **WEBHOOK Mode**, or **HYBRID Mode** as described in the guides below.
 4. Execute `/minebridge reload` (or `/mb reload`) in-game or from console to apply the configuration.
 
 ---
@@ -191,6 +202,49 @@ WEBHOOK mode uses asynchronous HTTP webhooks. No bot application, bot token, or 
    ```
 5. Run `/minebridge reload` in-game or console.
 
+### 3. HYBRID Mode Setup (Best of Both Worlds)
+
+HYBRID mode pairs high-fidelity webhook outbound delivery with real-time gateway bot reception:
+
+- **Minecraft → Discord**: Webhook delivers player messages using player skin heads (`https://mc-heads.net/avatar/{player}/100`) and custom display names. The Bot NEVER sends outbound Minecraft chat, ensuring zero duplicate messages.
+- **Discord → Minecraft**: Bot gateway listens to the configured Discord channel and relays chat messages into Minecraft. Bot messages and Webhook messages are automatically filtered out, preventing feedback loops.
+- **Event Notifications**: Player joins, leaves, deaths, advancements, and server lifecycle embeds are delivered via **exactly one** configured transport path (`discord.hybrid.event-delivery: WEBHOOK | BOT`, default: `WEBHOOK`).
+- **Failure Resilience**: Webhook delivery and Bot gateway reception operate independently. If the Discord bot disconnects, outbound player chat continues uninterrupted. If the webhook encounters rate-limits, inbound Discord chat continues uninterrupted.
+
+#### Transport Architecture Matrix
+
+| Direction / Feature | BOT Mode | WEBHOOK Mode | HYBRID Mode |
+|---|---|---|---|
+| **Minecraft → Discord chat** | Bot | Webhook | **Webhook** (dynamic player skin heads) |
+| **Discord → Minecraft chat** | Bot | Unsupported | **Bot** (real-time gateway listener) |
+| **Minecraft event notifications** | Bot channel embeds | Webhook embeds | **Single configured path** (`WEBHOOK` default, or `BOT`) |
+| **Discord bot connection** | Required | Not connected | **Required** (inbound chat, gateway events) |
+| **Discord webhook** | Not required | Required | **Required** (outbound chat, default events) |
+| **Discord → Minecraft commands** | Supported | Unsupported | **Supported** (via bot) |
+| **Player identity** | Single bot identity | Dynamic player avatar | **Dynamic player avatar** |
+
+#### Setup Instructions:
+
+1. Create a Discord Bot application and obtain your `bot-token` and `channel-id` (see [BOT Mode Setup](#1-bot-mode-setup-two-way-chat--events)).
+2. Create a Discord Webhook in your relay channel and copy your `webhook.url` (see [WEBHOOK Mode Setup](#2-webhook-mode-setup-one-way-outbound-relay)).
+3. Edit `plugins/MineBridge/config.yml`:
+   ```yaml
+   discord:
+     mode: HYBRID
+     bot-token: "YOUR_DISCORD_BOT_TOKEN_HERE" # Or use env var MINEBRIDGE_BOT_TOKEN
+     channel-id: "123456789012345678"
+     webhook:
+       url: "https://discord.com/api/webhooks/123456789012345678/abcdefg_hijk..."
+       username: "{prefix}{player}"
+       avatar-url: "https://mc-heads.net/avatar/{player}/100"
+     hybrid:
+       # Delivery transport for event embeds: WEBHOOK (default) or BOT.
+       event-delivery: WEBHOOK
+   server:
+     name: "Survival SMP"
+   ```
+4. Run `/minebridge reload` (or `/mb reload`) in-game or console.
+
 ---
 
 ## Optional Plugin Integrations
@@ -274,68 +328,122 @@ The following message categories are strictly excluded from Discord synchronizat
 
 ---
 
+## Modular Configuration Architecture
+
+MineBridge v1.4.0 organizes settings into **four distinct, modular YAML configuration files**, providing a beginner-friendly setup for new servers while offering comprehensive advanced customization:
+
+```
+plugins/MineBridge/
+├── config.yml      # Core settings, connection credentials, and high-level feature toggles
+├── messages.yml    # All user-facing chat, player, death, and advancement notification templates
+├── events.yml      # Event notification routing, category toggles, embed styling, and channel IDs
+└── advanced.yml    # Cross-world routing, Markdown translation toggles, webhook identity, and footers
+```
+
+### Environment Variable Resolution
+
+MineBridge securely resolves environment variables inside configuration files at runtime:
+- `${VAR_NAME}` — resolves from the environment variable; flags an error if missing.
+- `${VAR_NAME:default_value}` — resolves from the environment, falling back to `default_value` if unset.
+
+Environment variable expansion is supported on all sensitive and environment-specific settings:
+- `discord.bot-token` (e.g. `bot-token: "${MINEBRIDGE_BOT_TOKEN}"`)
+- `discord.channel-id` (e.g. `channel-id: "${MINEBRIDGE_CHANNEL_ID}"`)
+- `discord.webhook.url` (e.g. `url: "${DISCORD_WEBHOOK_URL}"`)
+- Channel IDs in `events.yml` (`player-events.channel-id`, `deaths.discord.channel-id`, `advancements.discord.channel-id`, `server-events.channel-id`)
+
+> [!TIP]
+> **Zero Leakage Security**: Resolved secrets are held in memory only and are **never** written back to disk or exposed in `/mb status` or server log files.
+
+### Automatic Migration & Idempotent Backups
+
+When upgrading an existing server from single-file `config.yml` setups:
+1. MineBridge automatically detects the legacy single-file configuration on startup.
+2. A timestamped safety backup is created under `plugins/MineBridge/backups/config-legacy-YYYYMMDD-HHmmss.yml`.
+3. All existing configuration keys (all 108 settings) and custom administrator modifications are migrated into the 4 modular files with zero data loss.
+4. Unrecognized custom keys are preserved in the backup file and logged in the console.
+5. Migration is fully **idempotent**: once migrated to `migration.version: 1`, subsequent restarts leave files untouched.
+
+---
+
 ## Configuration Reference
 
-### Discord & Core Settings
+### 1. `config.yml` (Core Settings & Features)
 
 | Setting | Default | Type | Description |
 | :--- | :--- | :--- | :--- |
-| `discord.mode` | `BOT` | String | Integration mode: `BOT` or `WEBHOOK` (case-insensitive). |
-| `discord.bot-token` | `""` | String | Discord bot token for BOT mode. (Or set `MINEBRIDGE_BOT_TOKEN` in environment). |
-| `discord.channel-id` | `""` | String | 17–20 digit Discord Snowflake channel ID (required in BOT mode when relay features are enabled). |
-| `discord.webhook.url` | `""` | String | Discord webhook HTTPS URL (required for WEBHOOK mode; points to discord.com or discordapp.com). |
-| `discord.webhook.username` | `"{prefix}{player}"` | String | Webhook author display name. Supports `{player}`, `{nickname}`, `{prefix}`, `{suffix}`, `{world}`, `{world_alias}`, `{server}`, and PAPI `%...%`. |
-| `discord.webhook.avatar-url` | `""` | String | Webhook author avatar URL. Supports `{player}` and PAPI `%...%`. |
-| `discord.embed.footer.text` | `""` | String | Custom embed footer text. Supports `{server}`. |
-| `discord.embed.footer.icon-url` | `""` | String | Custom embed footer icon URL (HTTP/HTTPS). |
-| `server.name` | `"Minecraft Server"` | String | Server name placeholder value used by `{server}` across templates and footers. |
-| `chat.cross-world.mode` | `GLOBAL` | String | Cross-world chat scope: `GLOBAL`, `PER_WORLD`, or `FILTERED`. |
-| `chat.cross-world.enabled-worlds` | `[]` | List | List of allowed world names when `mode` is `FILTERED`. |
-| `features.chat-relay` | `true` | Boolean | Enable chat relay (two-way for BOT, outbound for WEBHOOK). |
-| `features.join-leave-notifications` | `true` | Boolean | Enable player join/leave broadcasts and Discord notifications. |
+| `discord.mode` | `BOT` | String | Integration mode: `BOT`, `WEBHOOK`, or `HYBRID`. |
+| `discord.bot-token` | `""` | String | Discord bot token for BOT and HYBRID modes (supports `${VAR}`). |
+| `discord.channel-id` | `""` | String | 17–20 digit Snowflake ID of primary chat channel (supports `${VAR}`). |
+| `discord.webhook.url` | `""` | String | Full Discord Webhook URL for WEBHOOK and HYBRID modes (supports `${VAR}`). |
+| `features.chat-relay` | `true` | Boolean | Enable chat relay between Minecraft and Discord. |
+| `features.join-leave` | `true` | Boolean | Enable player join, leave, and first-join notifications. |
+| `features.deaths` | `true` | Boolean | Master toggle for player death announcements. |
+| `features.advancements` | `true` | Boolean | Master toggle for advancement and challenge completion announcements. |
 | `features.server-status` | `true` | Boolean | Enable the `/minebridge server` status command. |
 | `features.player-list` | `true` | Boolean | Enable the `/minebridge players` command. |
+| `server.name` | `"Minecraft Server"` | String | Server name placeholder value used by `{server}` across templates. |
 | `update-checker.enabled` | `true` | Boolean | Check Modrinth on startup and notify admins if an update is available. |
 
-### Message Templates and Placeholders
+### 2. `messages.yml` (Chat & Event Templates)
 
-| Template | Default | Supported Placeholders |
+| Template Key | Default | Supported Placeholders |
 | :--- | :--- | :--- |
-| `messages.minecraft-to-discord` | `"{prefix}**{player}**: {message}"` | `{player}`, `{nickname}`, `{display_name}`, `{message}`, `{timestamp}`, `{server}`, `{prefix}`, `{suffix}`, `{world}`, `{world_alias}`, `%...%` (PlaceholderAPI) |
-| `messages.discord-to-minecraft` | `&9[Discord] &f{player}: {message}` | `{player}`, `{display_name}`, `{username}`, `{message}`, `{timestamp}`, `{server}`, `{prefix}` |
-| `messages.player-join` | `🟢 **{player}** joined the server.` | `{player}`, `{timestamp}`, `{server}` |
-| `messages.player-leave` | `🔴 **{player}** left the server.` | `{player}`, `{timestamp}`, `{server}` |
-| `messages.server-status` | `&7Server &8\| &a{online}&7/&f{max} players online` | `{online}`, `{max}` |
-| `messages.player-list` | `&7Online players (&f{online}&7/&f{max}&7): {players}` | `{online}`, `{max}`, `{players}` |
+| `chat.minecraft-to-discord` | `"{prefix}**{player}**{suffix}: {message}"` | `{player}`, `{nickname}`, `{display_name}`, `{message}`, `{timestamp}`, `{server}`, `{prefix}`, `{suffix}`, `{world}`, `{world_alias}`, `{uuid}`, `%...%` (PlaceholderAPI) |
+| `chat.discord-to-minecraft` | `&9[Discord] &f{player}: {message}` | `{player}`, `{display_name}`, `{username}`, `{nickname}`, `{channel}`, `{message}`, `{timestamp}`, `{server}`, `{prefix}`, `{suffix}` |
+| `player.join` | `🟢 **{player}** joined the server.` | `{player}`, `{nickname}`, `{display_name}`, `{timestamp}`, `{server}`, `{prefix}`, `{suffix}`, `{world}`, `{world_alias}` |
+| `player.leave` | `🔴 **{player}** left the server.` | `{player}`, `{nickname}`, `{display_name}`, `{timestamp}`, `{server}`, `{prefix}`, `{suffix}`, `{world}`, `{world_alias}` |
+| `player.first-join` | `🌟 **{player}** joined the server for the first time!` | `{player}`, `{nickname}`, `{display_name}`, `{timestamp}`, `{server}`, `{prefix}`, `{suffix}`, `{world}`, `{world_alias}` |
+| `player.server-status` | `&7Server &8\| &a{online}&7/&f{max} players online` | `{online}`, `{max}`, `{server}` |
+| `player.player-list` | `&7Online players (&f{online}&7/&f{max}&7): {players}` | `{online}`, `{max}`, `{players}`, `{server}` |
+| `deaths.<category>` | Standard death messages (e.g. `&c☠ {victim} was slain by {killer}`) | `{victim}`, `{killer}`, `{cause}`, `{category}`, `{server}`, `{prefix}` |
+| `advancements.normal` | `&a✦ {player} has made the advancement [{title}]!` | `{player}`, `{title}`, `{description}`, `{category}`, `{challenge}`, `{server}`, `{prefix}` |
+| `advancements.challenge` | `&6🏆 {player} has completed the challenge [{title}]!` | `{player}`, `{title}`, `{description}`, `{category}`, `{challenge}`, `{server}`, `{prefix}` |
 
-> [!NOTE]
-> - `{player}` is **always** the real, unalterable Minecraft username (`player.getName()`).
-> - `{nickname}` and `{display_name}` resolve from EssentialsX (or display name fallback).
-> - `{prefix}` and `{suffix}` are resolved from LuckPerms (or Vault Chat fallback).
-> - `{world_alias}` is resolved from Multiverse-Core (falling back to world name).
-> - Arbitrary `%placeholder%` tokens are expanded via PlaceholderAPI when installed, evaluated strictly on templates (never on user message text).
+### 3. `events.yml` (Notification Routing & Embeds)
 
-### Event Notification Settings
+- **Player Events (`player-events`)**:
+  - `enabled`: Toggle player join/leave event system (`true`/`false`).
+  - `channel-id`: Channel ID override for player join/leave embeds (leave blank to use primary channel).
+  - `join` / `leave` / `first-join`: Individual toggles for each event type.
+  - `embeds.enabled`: Use minimalistic Discord embeds for player events.
+- **Deaths (`deaths`)**:
+  - `enabled`: Master toggle for death notifications.
+  - `minecraft.enabled` / `broadcast`: In-game death message formatting and broadcasting.
+  - `discord.enabled`: Relay death embeds to Discord.
+  - `discord.channel-id`: Channel override for death notifications (supports `${VAR}`).
+  - `discord.embed` / `discord.title` / `discord.description` / `discord.color`: Embed styling (`#D32F2F`).
+  - `categories.*`: Toggle individual categories (`player-kill`, `mob-kill`, `fall`, `lava`, `fire`, `drowning`, `void`, `explosion`, `environmental`, `other`).
+- **Advancements (`advancements`)**:
+  - `enabled`: Master toggle for advancement notifications.
+  - `minecraft.enabled` / `discord.enabled`: Minecraft and Discord relay toggles.
+  - `discord.channel-id`: Channel override for advancement embeds (supports `${VAR}`).
+  - `discord.title` / `discord.description` / `discord.challenge-title` / `discord.challenge-description` / `discord.color`: Embed styling (`#2196F3`).
+  - `challenges.enabled`: Independent toggle for challenge advancements.
+  - `categories.*`: Filter by category (`story`, `nether`, `end`, `adventure`, `husbandry`, `other`).
+- **Server Events (`server-events`)**:
+  - `enabled`: Server lifecycle notification toggle (`false` by default).
+  - `channel-id`: Channel override for server online/offline embeds.
+  - `start` / `stop`: Toggle `SERVER ONLINE` and `SERVER OFFLINE` embeds.
 
-- **Death Messages (`death-messages`)**:
-  - `death-messages.enabled`: Master toggle for death notifications (`true`/`false`).
-  - `death-messages.minecraft.enabled` / `broadcast`: In-game death message formatting.
-  - `death-messages.discord.enabled`: Relay death embeds to Discord.
-  - `death-messages.discord.channel-id`: Specific channel ID for death embeds in BOT mode (leave blank to use main channel).
-  - `death-messages.discord.title` / `description` / `color`: Embed customization (supports `{victim}`, `{killer}`, `{cause}`, `{category}`, `{message}`).
-  - `death-messages.categories.*`: Enable/disable specific death categories (`player-kill`, `mob-kill`, `fall`, `lava`, `fire`, `drowning`, `void`, `explosion`, `environmental`, `other`).
-- **Achievements & Advancements (`achievements`)**:
-  - `achievements.enabled`: Master toggle for advancement notifications (`true`/`false`).
-  - `achievements.minecraft.enabled`: In-game advancement messages.
-  - `achievements.discord.enabled`: Relay advancement embeds to Discord.
-  - `achievements.discord.channel-id`: Specific channel ID for advancement embeds in BOT mode.
-  - `achievements.challenges.enabled`: Special formatting for challenge advancements.
-  - `achievements.categories.*`: Filter by category (`story`, `nether`, `end`, `adventure`, `husbandry`, `other`).
-- **Discord Event Embeds (`discord-events`)**:
-  - `discord-events.enabled` / `embeds.enabled`: Master toggle and embed formatting.
-  - `discord-events.embeds.footer`: Fallback footer string.
-  - `discord-events.player-events`: Channel ID and individual toggles for `join`, `leave`, and `first-join`.
-  - `discord-events.achievements` / `deaths`: Channel routing and subcategory toggles.
+### 4. `advanced.yml` (Advanced Settings & Formatting)
+
+- **Cross-World Chat Routing (`chat-routing.cross-world`)**:
+  - `mode`: `GLOBAL` (default), `PER_WORLD`, or `FILTERED`.
+  - `enabled-worlds`: List of allowed worlds when `mode: FILTERED`.
+- **Markdown Formatting Translation (`formatting`)**:
+  - `minecraft-to-discord`: `format-conversion`, `allow-bold`, `allow-italic`, `allow-underline`, `allow-strikethrough`, `allow-obfuscated`.
+  - `discord-to-minecraft`: `format-conversion`, `allow-bold`, `allow-italic`, `allow-underline`, `allow-strikethrough`, `allow-code`, `show-attachments`.
+- **Webhook Customization (`webhook`)**:
+  - `username`: Webhook author display name (default: `"{prefix}{player}"`).
+  - `avatar-url`: Webhook author avatar URL (default: `"https://mc-heads.net/avatar/{uuid}/100"`).
+- **Hybrid Delivery (`hybrid`)**:
+  - `event-delivery`: `WEBHOOK` (default) or `BOT`.
+- **Embed Footers (`embeds.footer`)**:
+  - `text`: Custom footer text.
+  - `icon-url`: Custom footer icon URL.
+- **Migration Tracking (`migration`)**:
+  - `version`: Internal schema version (`1`). Automatically maintained.
 
 ---
 

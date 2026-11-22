@@ -105,9 +105,11 @@ public final class AdvancementAnnouncementManager {
                                 ? settings.challengeEmbedDescription()
                                 : settings.embedDescription(),
                         context);
-                int color = context.challenge()
-                        ? DiscordEmbedFactory.CHALLENGE_COLOR
-                        : settings.embedColor();
+                int defaultCategoryColor = DiscordEmbedFactory.categoryColor(
+                        context.category(), context.challenge());
+                int color = (settings.embedColor() != 0 && settings.embedColor() != 0x2196F3)
+                        ? settings.embedColor()
+                        : defaultCategoryColor;
                 var embed = DiscordEmbedFactory.advancement(
                         title,
                         description,

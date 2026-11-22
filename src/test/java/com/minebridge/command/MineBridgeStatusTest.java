@@ -47,4 +47,21 @@ class MineBridgeStatusTest {
         assertTrue(lines.stream().anyMatch(
                 line -> line.contains("Outgoing dropped: §f3000000000")));
     }
+
+    @Test
+    void formatsHybridModeWithBothBotAndWebhookStatus() {
+        MineBridgeStatus status = new MineBridgeStatus(
+                com.minebridge.discord.IntegrationMode.HYBRID,
+                "CONNECTED", true, 3, 100, 10_000L, true, true, 0L, true,
+                "READY", true);
+
+        var lines = status.formatLines();
+
+        assertTrue(lines.stream().anyMatch(line -> line.contains("Mode: §fHYBRID")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("Discord bot: §aCONNECTED")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("Configured channel: §aAvailable")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("Webhook status: §aREADY")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("Webhook destination: §aValid")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("LuckPerms: §aAvailable")));
+    }
 }

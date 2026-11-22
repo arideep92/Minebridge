@@ -33,6 +33,29 @@ class ConfigManagerDiscordEventsTest {
         assertFalse(settings.achievementCategories().get("nether"));
         assertFalse(settings.mobKillsEnabled());
         assertEquals("12345678901234568", settings.deathsChannelId());
+        assertFalse(settings.serverEventsEnabled());
+        assertTrue(settings.serverStartEnabled());
+        assertTrue(settings.serverStopEnabled());
+    }
+
+    @Test
+    void loadsAndTogglesServerEventsIndependently() throws Exception {
+        YamlConfiguration configuration = bundledDefaults();
+        configuration.set("discord.bot-token", "test-token");
+        configuration.set("discord.channel-id", "12345678901234567");
+        configuration.set("discord-events.server-events.enabled", true);
+        configuration.set("discord-events.server-events.channel-id", "12345678901234569");
+        configuration.set("discord-events.server-events.start", true);
+        configuration.set("discord-events.server-events.stop", false);
+
+        var candidate = new ConfigManager(null).candidateFrom(configuration, null);
+
+        assertTrue(candidate.valid(), candidate.errors().toString());
+        var settings = candidate.settings().discordEvents();
+        assertTrue(settings.serverEventsEnabled());
+        assertEquals("12345678901234569", settings.serverEventsChannelId());
+        assertTrue(settings.serverStartEnabled());
+        assertFalse(settings.serverStopEnabled());
     }
 
     @Test

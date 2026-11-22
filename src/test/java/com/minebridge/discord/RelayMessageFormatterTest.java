@@ -280,4 +280,44 @@ class RelayMessageFormatterTest {
 
         assertEquals("[SMP] [Discord] AlexReal [Verified]: Greetings", minecraft);
     }
+
+    @Test
+    void formatsDiscordWithUuidAndFormattingTranslation() {
+        String template = "{player} ({uuid}): {message}";
+        String formatted = RelayMessageFormatter.formatForDiscord(
+                template,
+                "AlexReal",
+                "AlexReal",
+                "&lBold Message",
+                "2026-11-20T12:00:00Z",
+                "SMP",
+                "",
+                "",
+                "world",
+                "Overworld",
+                "069a79f4-44e9-4726-a5be-fca90e38aaf5",
+                MinecraftToDiscordFormatter.Options.DEFAULT);
+
+        assertEquals("AlexReal (069a79f4-44e9-4726-a5be-fca90e38aaf5): **Bold Message**", formatted);
+    }
+
+    @Test
+    void formatsMinecraftWithChannelNicknameAndMarkdownTranslation() {
+        String template = "[#{channel}] {nickname}: {message}";
+        String formatted = RelayMessageFormatter.formatForMinecraft(
+                template,
+                "Effective",
+                "Display",
+                "Username",
+                "CustomNick",
+                "Hello **world** from discord!",
+                "2026-11-20T12:00:00Z",
+                "SMP",
+                "",
+                "",
+                "general-chat",
+                DiscordToMinecraftFormatter.Options.DEFAULT);
+
+        assertEquals("[#general-chat] CustomNick: Hello §lworld§r from discord!", formatted);
+    }
 }

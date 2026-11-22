@@ -5,6 +5,96 @@ versioning: breaking configuration or command changes require a major release;
 backward-compatible features use a minor release; compatible fixes use a patch
 release.
 
+## [1.4.0] - 2026-11-22
+
+### Added
+
+- **Modular Configuration Architecture Redesign**:
+  - **Clean 4-File Separation**:
+    - `config.yml`: Minimal, beginner-friendly core setup (mode, bot token, channel ID, webhook URL, core feature toggles, server name, update-checker).
+    - `messages.yml`: All user-facing chat relay, player join/leave, server status, player list, death, and advancement notification templates with full placeholder documentation.
+    - `events.yml`: Fine-grained event notification routing, category toggles, embed titles, descriptions, hex colors, and per-module channel overrides.
+    - `advanced.yml`: Cross-world chat routing (`chat-routing.cross-world`), Markdown formatting translation toggles, webhook identity, hybrid event delivery transport, embed footers, and migration version tracking.
+  - **Environment Variable Resolution**:
+    - Secure inline resolution using `${VAR}` and `${VAR:default}` syntax for sensitive credentials and channel IDs (`discord.bot-token`, `discord.channel-id`, `discord.webhook.url`, and channel overrides in `events.yml`).
+    - Values are held in memory only and never written back to disk or leaked in logs or `/mb status`.
+  - **Automated Legacy Migration & Safe Backups**:
+    - Automatic detection of legacy single-file configurations (`plugins/MineBridge/config.yml`).
+    - Creates timestamped, idempotent backups in `plugins/MineBridge/backups/config-legacy-YYYYMMDD-HHmmss.yml` prior to modifying any files.
+    - Maps all 108 existing legacy configuration keys to the new modular structure with zero data loss.
+    - Preserves custom values and unrecognized keys in the backup.
+    - Completely idempotent: once migrated, subsequent restarts leave files untouched.
+  - **Atomic Reload Lifecycle**:
+    - In-place configuration reload via `/mb reload` loads and validates configuration candidates in memory before committing.
+    - If validation fails, existing settings and snapshot remain active with zero interruption to ongoing chat relay or event listeners.
+- **DiscordSRV-Inspired Chat Integration & Webhook Redesign**:
+  - **Bidirectional Markdown Formatting Translation**:
+    - **Minecraft → Discord (`MinecraftToDiscordFormatter`)**: Translates Minecraft formatting codes (`&` and `§`, including hex colors `§x...`, `&#...`, `{#...}`) into standard Discord Markdown: Bold (`**`), Italic (`*`), Underline (`__`), Strikethrough (`~~`), and Obfuscated (`||` spoiler). Closes active formatting styles in reverse order upon color or reset codes. Escapes user-supplied Markdown characters to prevent user chat breaking Discord styling, and defuses mass mentions (`@everyone`, `@here`).
+    - **Discord → Minecraft (`DiscordToMinecraftFormatter`)**: Translates Discord Markdown (`**`, `*`, `_`, `__`, `~~`, `` ` ``, ```` ``` ````, `||`, URLs) into corresponding Minecraft formatting codes (`§l`, `§o`, `§n`, `§m`, `§7`). Strips raw `§` characters to prevent malicious color injection, admin rank spoofing, and format exploitation.
+    - **Granular Formatting Toggles**: Independent toggles under `chat.minecraft-to-discord` and `chat.discord-to-minecraft` (`format-conversion`, `allow-bold`, `allow-italic`, `allow-underline`, `allow-strikethrough`, `allow-obfuscated`, `allow-code`, `show-attachments`).
+  - **Skin Avatar Resolution Service (`SkinAvatarService`)**:
+    - Asynchronous, non-blocking player skin head avatar resolution supporting UUIDs (`{uuid}`) and player names (`{player}`).
+    - Bounded in-memory TTL cache (`ConcurrentHashMap`, default TTL 60 minutes, max 2000 entries) preventing repeated string allocations and latency.
+    - Automatic cache invalidation on player quit and `/mb reload`.
+    - Predictable fallback to Steve avatar for offline or missing skins.
+  - **Long Webhook Message Splitting (`WebhookMessageSplitter`)**:
+    - Automatically splits outbound Discord webhook messages exceeding the 2000-character limit into valid segments (`<= 2000` chars).
+    - Natural boundary detection: searches for newlines (`\n`) and whitespace (` `) within the split window.
+    - UTF-16 surrogate pair protection: ensures emoji characters are never split across segments.
+    - Style preservation across segment boundaries: automatically closes open formatting tags at the end of each segment and reopens them at the beginning of the next.
+  - **Webhook Identity & Payload Sanitization**:
+    - Webhook username sanitization: enforces 1–80 characters, strips mass mentions (`@everyone`, `@here`), and replaces disallowed Discord system names (such as "clyde").
+    - Webhook avatar URL validation: ensures HTTP/HTTPS protocol, enforces 2048-character limit, and filters out malformed URLs.
+  - **Discord Attachments & Inbound Chat Polish**:
+    - When Discord users post attachments (images, files), MineBridge appends clean readable indicators (e.g. `[image.png]`) to the relayed Minecraft chat message.
+    - Expanded template placeholders: `{uuid}` for Minecraft messages/webhooks, `{channel}` and `{nickname}` for Discord messages.
+- **HYBRID Mode Integration (`discord.mode: HYBRID`)**:
+  - Introduced a third supported integration mode that pairs high-fidelity webhook outbound delivery with real-time gateway bot inbound reception.
+  - **Directional Chat Transport**:
+    - **Minecraft → Discord**: Routed exclusively via Webhook with dynamic player avatar renders (`https://mc-heads.net/avatar/{player}/100`) and LuckPerms/Vault prefix tags. The Bot never sends outbound Minecraft chat, preventing duplicate messages.
+    - **Discord → Minecraft**: Inbound Discord chat is received via JDA `MessageReceivedEvent` in the configured channel. Webhook messages and Bot messages are filtered out, preventing feedback loops.
+  - **Configurable Event Notification Transport**:
+    - Game event embeds (joins, leaves, deaths, advancements, and server lifecycle) are routed through **exactly one** configured path via `discord.hybrid.event-delivery` (`WEBHOOK` default, or `BOT`).
+    - Eliminates duplicate notifications across transports.
+  - **Independent Failure Isolation**:
+    - Webhook outbound delivery and Bot gateway inbound relay operate as decoupled components.
+    - If the Discord bot gateway temporarily disconnects or reconnects, outbound player chat and notifications continue uninterrupted.
+    - If the Discord webhook encounters HTTP rate limiting or errors, inbound Discord chat continues uninterrupted.
+    - Zero automatic transport failover that risks duplicate messages.
+  - **Full Reload State Machine**:
+    - Seamless live reload transitions between all 9 mode combinations (`BOT <-> HYBRID`, `WEBHOOK <-> HYBRID`, `HYBRID <-> HYBRID`) via `/mb reload`.
+    - Correct startup, connection pooling, and resource shutdown on reload and server stop.
+  - **Dual-State Status Reporting**:
+    - `/mb status` in HYBRID mode formats both Discord Bot gateway state / channel availability and Webhook worker status / destination validity.
+
+## [1.3.3] - 2026-11-22
+
+### Added
+
+- **Server Lifecycle Notifications**:
+  - Added compact, dedicated Discord embeds for server lifecycle events: `SERVER ONLINE` (subtle emerald green) and `SERVER OFFLINE` (subtle soft red).
+  - Added independent configuration controls under `discord-events.server-events`:
+    - `enabled`: master toggle (defaults to `false` for 100% backward compatibility with existing servers).
+    - `channel-id`: optional custom channel override for server lifecycle events.
+    - `start`: independent toggle for `SERVER ONLINE` embeds on server startup.
+    - `stop`: independent toggle for `SERVER OFFLINE` embeds on server shutdown.
+- **Player Head Avatars in Embeds & Webhooks**:
+  - Player head avatars (`https://mc-heads.net/avatar/{player}/64`) integrated into author icons across all player, death, and advancement embeds.
+  - Webhook chat messages now default to the player's skin head render (`https://mc-heads.net/avatar/{player}/100`), while maintaining full support for custom avatar URL overrides.
+  - Robust sanitization of player names for avatar URL construction with graceful fallback to `"Steve"` for missing or invalid characters.
+
+### Changed
+
+- **Minimalistic Notification Redesign**:
+  - Completely redesigned all Discord event notifications into compact, clean, single-card embeds with zero redundant fields (~60–70% vertical height reduction).
+  - **Player Join**: Compact embed with short title `JOIN`, player head avatar, subtle green sidebar (`#43B581`), timestamp, and 0 redundant fields.
+  - **Player Leave**: Compact embed with short title `LEAVE`, player head avatar, subtle red sidebar (`#EF5350`), timestamp, and 0 redundant fields.
+  - **First-Time Join**: Compact embed with title `FIRST JOIN`, gold sidebar (`#FAA61A`), player head avatar, short welcome message, and timestamp.
+  - **Death Notifications**: Compact embed with short title `DEATH`, player head avatar, clear death message in description, and conditional detail fields (displays `Killer` or `Cause` only when relevant and available; eliminates redundant `Victim` fields).
+  - **Advancement & Achievement Notifications**: Ultra-compact embeds with title `ADVANCEMENT` or `CHALLENGE`, player head avatar, advancement title in description, zero redundant fields.
+  - **Subtle Category Colors**: Applied refined, subtle color palettes for advancement categories: Story (`#3498DB`), Nether (`#D35400`), End (`#9B59B6`), Adventure (`#1ABC9C`), Husbandry (`#2ECC71`), and Challenges (`#F1C40F`).
+  - **Chat Formatting**: Preserved plain-text chat formatting for both Minecraft → Discord and Discord → Minecraft with clean token spacing and strict markdown escaping.
+
 ## [1.3.2] - 2026-11-22
 
 ### Changed

@@ -2,9 +2,12 @@ package com.minebridge.listener;
 
 import com.minebridge.MineBridgePlugin;
 import com.minebridge.config.ConfigManager;
+import com.minebridge.discord.DiscordEmbedFactory;
 import com.minebridge.discord.DiscordService;
 import com.minebridge.discord.IntegrationMode;
+import com.minebridge.discord.MinecraftToDiscordFormatter;
 import com.minebridge.discord.RelayMessageFormatter;
+import com.minebridge.discord.SkinAvatarService;
 import com.minebridge.discord.WebhookService;
 import com.minebridge.hook.ChatMetadataService;
 import com.minebridge.hook.LuckPermsHook;
@@ -13,6 +16,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.time.Instant;
 import java.util.function.Consumer;
@@ -23,6 +27,7 @@ public final class ChatListener implements Listener {
     private final ConfigManager config;
     private final ChatMetadataService chatMetadata;
     private final ChatDeduplicator deduplicator;
+    private final SkinAvatarService skinAvatarService;
     private volatile DiscordService discord;
     private volatile WebhookService webhook;
 
@@ -83,7 +88,7 @@ public final class ChatListener implements Listener {
             WebhookService webhook,
             ConfigManager config,
             ChatMetadataService chatMetadata) {
-        this(plugin, discord, webhook, config, chatMetadata, new ChatDeduplicator());
+        this(plugin, discord, webhook, config, chatMetadata, new ChatDeduplicator(), new SkinAvatarService());
     }
 
     public ChatListener(
@@ -93,17 +98,43 @@ public final class ChatListener implements Listener {
             ConfigManager config,
             ChatMetadataService chatMetadata,
             ChatDeduplicator deduplicator) {
+        this(plugin, discord, webhook, config, chatMetadata, deduplicator, new SkinAvatarService());
+    }
+
+    public ChatListener(
+            MineBridgePlugin plugin,
+            DiscordService discord,
+            WebhookService webhook,
+            ConfigManager config,
+            ChatMetadataService chatMetadata,
+            SkinAvatarService skinAvatarService) {
+        this(plugin, discord, webhook, config, chatMetadata, new ChatDeduplicator(), skinAvatarService);
+    }
+
+    public ChatListener(
+            MineBridgePlugin plugin,
+            DiscordService discord,
+            WebhookService webhook,
+            ConfigManager config,
+            ChatMetadataService chatMetadata,
+            ChatDeduplicator deduplicator,
+            SkinAvatarService skinAvatarService) {
         this.plugin = plugin;
         this.discord = discord;
         this.webhook = webhook;
         this.config = config;
         this.chatMetadata = chatMetadata != null ? chatMetadata : new ChatMetadataService();
         this.deduplicator = deduplicator != null ? deduplicator : new ChatDeduplicator();
+        this.skinAvatarService = skinAvatarService != null ? skinAvatarService : new SkinAvatarService();
     }
 
     public void updateServices(DiscordService discord, WebhookService webhook) {
         this.discord = discord;
         this.webhook = webhook;
+    }
+
+    public SkinAvatarService getSkinAvatarService() {
+        return skinAvatarService;
     }
 
     public ChatDeduplicator getDeduplicator() {
@@ -162,6 +193,13 @@ public final class ChatListener implements Listener {
         relayChatMessage(player, message);
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        if (event != null && event.getPlayer() != null) {
+            skinAvatarService.invalidate(event.getPlayer().getUniqueId());
+        }
+    }
+
     public void relayChatMessage(Player player, String message) {
         if (player == null || message == null || message.isBlank()) {
             return;
@@ -175,6 +213,12 @@ public final class ChatListener implements Listener {
         String nickname = chatMetadata.getNickname(player);
         String world = chatMetadata.getWorldName(player);
         String worldAlias = chatMetadata.getWorldAlias(player);
+        String uuidStr = player.getUniqueId() != null ? player.getUniqueId().toString() : "";
+
+        ConfigManager.MinecraftChatFormattingSettings mcFormatting =
+                current != null && current.chatFormatting() != null
+                        ? current.chatFormatting().minecraftToDiscord()
+                        : ConfigManager.defaultMinecraftChatFormattingSettings();
 
         String template = config != null
                 ? config.message("messages.minecraft-to-discord", "{prefix}**{player}**{suffix}: {message}")
@@ -182,7 +226,7 @@ public final class ChatListener implements Listener {
         // PlaceholderAPI processes trusted server template only (never user message content)
         template = chatMetadata.applyPlaceholders(player, template);
 
-        if (current != null && current.mode() == IntegrationMode.WEBHOOK) {
+        if (current != null && (current.mode() == IntegrationMode.WEBHOOK || current.mode() == IntegrationMode.HYBRID)) {
             if (webhook == null) {
                 return;
             }
@@ -193,20 +237,15 @@ public final class ChatListener implements Listener {
             usernameTemplate = chatMetadata.applyPlaceholders(player, usernameTemplate);
 
             String resolvedUsername = RelayMessageFormatter.formatWebhookUsername(
-                    usernameTemplate, player.getName(), nickname, server, prefix, suffix, world, worldAlias);
+                    usernameTemplate, player.getName(), nickname, server, prefix, suffix, world, worldAlias, uuidStr);
 
             String avatarTemplate = webhookSettings != null && !webhookSettings.avatarUrl().isBlank()
                     ? webhookSettings.avatarUrl()
-                    : "";
+                    : SkinAvatarService.DEFAULT_AVATAR_TEMPLATE;
             avatarTemplate = chatMetadata.applyPlaceholders(player, avatarTemplate);
-            String resolvedAvatar = avatarTemplate.isBlank() ? "" : avatarTemplate
-                    .replace("{player}", player.getName())
-                    .replace("{nickname}", nickname)
-                    .replace("{server}", server != null ? server : "")
-                    .replace("{prefix}", prefix)
-                    .replace("{suffix}", suffix)
-                    .replace("{world}", world)
-                    .replace("{world_alias}", worldAlias);
+
+            String resolvedAvatar = skinAvatarService.getAvatarUrl(
+                    player.getUniqueId(), player.getName(), avatarTemplate, server);
 
             relayIfNonBlank(
                     template,
@@ -219,6 +258,8 @@ public final class ChatListener implements Listener {
                     suffix,
                     world,
                     worldAlias,
+                    uuidStr,
+                    mcFormatting.toOptions(),
                     formatted -> webhook.send(resolvedUsername, resolvedAvatar, formatted));
         } else {
             if (discord == null) {
@@ -235,6 +276,8 @@ public final class ChatListener implements Listener {
                     suffix,
                     world,
                     worldAlias,
+                    uuidStr,
+                    mcFormatting.toOptions(),
                     discord::send);
         }
     }
@@ -271,11 +314,29 @@ public final class ChatListener implements Listener {
             String world,
             String worldAlias,
             Consumer<String> sender) {
+        return relayIfNonBlank(
+                template, player, nickname, message, timestamp, server, prefix, suffix, world, worldAlias, "", null, sender);
+    }
+
+    public static boolean relayIfNonBlank(
+            String template,
+            String player,
+            String nickname,
+            String message,
+            String timestamp,
+            String server,
+            String prefix,
+            String suffix,
+            String world,
+            String worldAlias,
+            String uuid,
+            MinecraftToDiscordFormatter.Options formattingOptions,
+            Consumer<String> sender) {
         if (message == null || message.isBlank()) {
             return false;
         }
         sender.accept(RelayMessageFormatter.formatForDiscord(
-                template, player, nickname, message, timestamp, server, prefix, suffix, world, worldAlias));
+                template, player, nickname, message, timestamp, server, prefix, suffix, world, worldAlias, uuid, formattingOptions));
         return true;
     }
 }

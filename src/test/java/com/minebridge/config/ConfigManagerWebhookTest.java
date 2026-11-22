@@ -120,7 +120,7 @@ class ConfigManagerWebhookTest {
     void rejectsInvalidIntegrationMode() {
         String yaml = """
                 discord:
-                  mode: "HYBRID"
+                  mode: "INVALID_UNKNOWN_MODE"
                   bot-token: "%s"
                   channel-id: "%s"
                 """.formatted(VALID_TOKEN, VALID_CHANNEL);
@@ -129,7 +129,7 @@ class ConfigManagerWebhookTest {
 
         assertFalse(candidate.valid());
         assertTrue(candidate.errors().stream().anyMatch(
-                err -> err.contains("discord.mode must be either BOT or WEBHOOK.")));
+                err -> err.contains("discord.mode must be either BOT, WEBHOOK, or HYBRID.")));
     }
 
     @Test
@@ -264,7 +264,37 @@ class ConfigManagerWebhookTest {
         assertEquals(IntegrationMode.BOT, IntegrationMode.fromString("BOT"));
         assertEquals(IntegrationMode.WEBHOOK, IntegrationMode.fromString("webhook"));
         assertEquals(IntegrationMode.WEBHOOK, IntegrationMode.fromString("WEBHOOK"));
+        assertEquals(IntegrationMode.HYBRID, IntegrationMode.fromString("hybrid"));
+        assertEquals(IntegrationMode.HYBRID, IntegrationMode.fromString("HYBRID"));
         assertNull(IntegrationMode.fromString("unknown", null));
         assertEquals(IntegrationMode.BOT, IntegrationMode.fromString("unknown", IntegrationMode.BOT));
+        assertEquals(IntegrationMode.HYBRID, IntegrationMode.fromString("unknown", IntegrationMode.HYBRID));
+    }
+
+    @Test
+    void readsChatFormattingSettings() {
+        String yaml = """
+                discord:
+                  bot-token: "%s"
+                  channel-id: "%s"
+                chat:
+                  minecraft-to-discord:
+                    format-conversion: true
+                    allow-bold: false
+                    allow-italic: true
+                  discord-to-minecraft:
+                    format-conversion: false
+                    show-attachments: false
+                """.formatted(VALID_TOKEN, VALID_CHANNEL);
+
+        ConfigManager.Candidate candidate = configManager().candidateFrom(parseYaml(yaml), null);
+        assertTrue(candidate.valid(), "Errors: " + candidate.errors());
+        ConfigManager.ChatFormattingSettings formatting = candidate.settings().chatFormatting();
+        assertNotNull(formatting);
+        assertTrue(formatting.minecraftToDiscord().formatConversion());
+        assertFalse(formatting.minecraftToDiscord().allowBold());
+        assertTrue(formatting.minecraftToDiscord().allowItalic());
+        assertFalse(formatting.discordToMinecraft().formatConversion());
+        assertFalse(formatting.discordToMinecraft().showAttachments());
     }
 }
